@@ -1,0 +1,31 @@
+[package]
+name = "example_kernel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[package.metadata.qemu_runner]
+limine-branch = "v4.x-branch-binary"
+
+extra-files = [
+    "limine.cfg"
+]
+
+test-success-exit-code = 33
+
+test-args = [
+    "-device", "isa-debug-exit,iobase=0xf4,iosize=0x4", "-serial", "stdio",
+    "-display", "none"
+]
+
+run-args = ["-d", "int", "-no-reboot", "-no-shutdown"]
+
+run-command = ["qemu-system-x86_64",
+    "-boot", "d",
+    "-cdrom", "{}",
+    "-m", "200M",
+    "-machine", "q35",
+    "-cpu", "qemu64",
+    "-smp", "2"
+]
