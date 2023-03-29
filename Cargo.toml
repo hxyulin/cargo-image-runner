@@ -1,6 +1,6 @@
 [package]
 name = "cargo-qemu-runner"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "A cargo subcommand that allows running Limine kernels using cargo run"
@@ -12,7 +12,6 @@ serde_json = "1.0.94"
 serde = { version = "1.0.152", features = ["derive"] }
 
 [package.metadata.qemu_runner]
-build-command = ["build"]
 limine-branch = "v4.x-branch-binary"
 
 extra-files = [

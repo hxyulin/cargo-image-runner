@@ -172,7 +172,7 @@ fn main() {
 	let root_package = metadata.root_package().expect("no root package found");
 
 	let mut data: PackageMetadata = serde_json::from_value(root_package.metadata.clone())
-		.expect("no [package.manifest.qemu_runner] entry specified");
+		.expect("no [package.metadata.qemu_runner] entry specified");
 
 	let mut target_dest_file = std::path::Path::new(target_exe_path).file_name().unwrap().to_str().unwrap();
 
