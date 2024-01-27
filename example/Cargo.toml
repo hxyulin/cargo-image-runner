@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 
 [package.metadata.qemu_runner]
-limine-branch = "v4.x-branch-binary"
+limine-branch = "v6.x-branch-binary"
 
 extra-files = [
     "limine.cfg"

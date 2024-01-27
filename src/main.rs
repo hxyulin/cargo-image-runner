@@ -114,13 +114,26 @@ fn prepare_iso(
 
 	let plain_iso_file = std::path::Path::new(iso_file).file_name().unwrap().to_str().unwrap();
 
+	let limine_sys_file;
+	let limine_bios_cd_file;
+	let limine_uefi_cd_file;
+	if limine_branch.split_once('-').unwrap().0 == "v4.x" {
+		limine_sys_file = "limine.sys";
+		limine_bios_cd_file = "limine-cd.bin";
+		limine_uefi_cd_file = "limine-cd-efi.bin";
+	} else {
+		limine_sys_file = "limine-bios.sys";
+		limine_bios_cd_file = "limine-bios-cd.bin";
+		limine_uefi_cd_file = "limine-uefi-cd.bin";
+	}
+
 	if !std::path::Path::new(&format!("target/limine/{}_done", plain_iso_file)).exists() {
-		std::fs::copy("target/limine/limine.sys", &format!("{}/{}", iso_root, "limine.sys"))
-			.expect(&format!("failed to copy file {}", &format!("{}/{}", iso_root, "limine.sys")));
-		std::fs::copy("target/limine/limine-cd.bin", &format!("{}/{}", iso_root, "limine-cd.bin"))
-			.expect(&format!("failed to copy file {}", &format!("{}/{}", iso_root, "limine-cd.bin")));
-		std::fs::copy("target/limine/limine-cd-efi.bin", &format!("{}/{}", iso_root, "limine-cd-efi.bin"))
-			.expect(&format!("failed to copy file {}", &format!("{}/{}", iso_root, "limine-cd-efi.bin")));
+		std::fs::copy(format!("target/limine/{}", limine_sys_file), format!("{}/{}", iso_root, limine_sys_file))
+			.expect(&format!("failed to copy file {}/{}", iso_root, limine_sys_file));
+		std::fs::copy(format!("target/limine/{}", limine_bios_cd_file), format!("{}/{}", iso_root, limine_bios_cd_file))
+			.expect(&format!("failed to copy file {}/{}", iso_root, limine_bios_cd_file));
+		std::fs::copy(format!("target/limine/{}", limine_uefi_cd_file), format!("{}/{}", iso_root, limine_uefi_cd_file))
+			.expect(&format!("failed to copy file {}/{}", iso_root, limine_uefi_cd_file));
 		files_changed = true;
 	}
 
@@ -128,11 +141,11 @@ fn prepare_iso(
 		let xorriso_cmd = Command::new("xorriso")
 			.args(vec![
 				"-as", "mkisofs",
-				"-b", "limine-cd.bin",
+				"-b", limine_bios_cd_file,
 				"-no-emul-boot",
 				"-boot-load-size", "4",
 				"-boot-info-table",
-				"--efi-boot", "limine-cd-efi.bin",
+				"--efi-boot", limine_uefi_cd_file,
 				"--efi-boot-part",
 				"--efi-boot-image",
 				"--protective-msdos-label",
