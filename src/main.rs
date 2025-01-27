@@ -86,9 +86,6 @@ fn prepare_iso(
     extra_files: &Vec<String>,
     limine_branch: &str,
 ) {
-    // Print current directory
-    println!("Current directory: {:?}", std::env::current_dir());
-
     let mut files_changed = false;
 
     let root_dir = PathBuf::from(root_dir);
@@ -111,7 +108,6 @@ fn prepare_iso(
         files_changed = true;
         // We need to do something, we need to format the contents of the config file with the
         // exeucutable name as the first argument
-        println!("config file {:?}", config_path);
         let mut config_file_contents = std::fs::read_to_string(&config_path).unwrap();
         config_file_contents = config_file_contents.replace("{{BINARY_NAME}}", target_dst_name);
         std::fs::write(config_dest_path, config_file_contents).unwrap();
@@ -235,9 +231,7 @@ fn prepare_iso(
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
-    println!("{:?}", args);
     let mut args_iter = args.iter().skip(2);
-    println!("{:?}", std::env::vars());
 
     //let target = std::env::var("TARGET").unwrap_or("x86_64".to_string());
     let manifest_path = std::env::var("CARGO_MANIFEST_PATH").ok();
