@@ -1,7 +1,17 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::process::{exit, Command, Stdio};
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+pub enum BootType {
+    #[default]
+    #[serde(rename = "bios")]
+    Bios,
+    #[serde(rename = "uefi")]
+    Uefi,
+}
 
 #[derive(Debug, Deserialize)]
 struct RunnerMetadata {
@@ -23,6 +33,9 @@ struct RunnerMetadata {
     #[serde(rename = "test-success-exit-code")]
     #[serde(default)]
     test_success_exit_code: u32,
+    //#[serde(rename = "boot-type")]
+    //#[serde(default)]
+    //boot_type: BootType,
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,7 +43,7 @@ struct PackageMetadata {
     qemu_runner: RunnerMetadata,
 }
 
-fn is_file_equal(file1: &str, file2: &str) -> bool {
+fn is_file_equal(file1: &PathBuf, file2: &PathBuf) -> bool {
     let mut f1 = File::open(file1).unwrap();
     let f2 = File::open(file2);
 
@@ -64,6 +77,7 @@ fn is_file_equal(file1: &str, file2: &str) -> bool {
 }
 
 fn prepare_iso(
+    root_dir: &str,
     iso_root: &str,
     iso_file: &str,
     target_exe_path: &str,
@@ -72,41 +86,44 @@ fn prepare_iso(
     extra_files: &Vec<String>,
     limine_branch: &str,
 ) {
-    std::fs::create_dir_all(iso_root).unwrap();
+    // Print current directory
+    println!("Current directory: {:?}", std::env::current_dir());
 
     let mut files_changed = false;
 
-    let target_dest_path = format!("{}/{}", iso_root, target_dst_name);
+    let root_dir = PathBuf::from(root_dir);
+    let iso_root = root_dir.join(iso_root);
+    std::fs::create_dir_all(&iso_root).unwrap();
+    let target_dest_path = iso_root.join(target_dst_name);
+    let target_exe_path = root_dir.join(target_exe_path);
 
-    if !is_file_equal(target_exe_path, &target_dest_path) {
+    if !is_file_equal(&target_exe_path, &target_dest_path) {
         files_changed = true;
-        std::fs::copy(target_exe_path, &target_dest_path)
-            .expect(&format!("failed to copy file {}", target_exe_path));
+        std::fs::copy(&target_exe_path, &target_dest_path).expect(&format!(
+            "failed to copy file {}",
+            target_exe_path.to_string_lossy()
+        ));
     }
 
-    let config_dest_path = format!("{}/{}", iso_root, config_file);
-    if !is_file_equal(config_file, &config_dest_path) {
+    let config_path = root_dir.join(config_file);
+    let config_dest_path = iso_root.join(config_file);
+    if !is_file_equal(&config_path, &config_dest_path) {
         files_changed = true;
         // We need to do something, we need to format the contents of the config file with the
         // exeucutable name as the first argument
-        let mut config_file_contents = std::fs::read_to_string(config_file).unwrap();
+        println!("config file {:?}", config_path);
+        let mut config_file_contents = std::fs::read_to_string(&config_path).unwrap();
         config_file_contents = config_file_contents.replace("{{BINARY_NAME}}", target_dst_name);
         std::fs::write(config_dest_path, config_file_contents).unwrap();
     }
 
     for file in extra_files.iter() {
-        if !is_file_equal(file, format!("{}/{}", iso_root, file).as_str()) {
+        let file_path = root_dir.join(file);
+        let file_dest_path = iso_root.join(file);
+        if !is_file_equal(&file_path, &file_dest_path) {
             files_changed = true;
             let path = std::path::Path::new(file);
-            std::fs::copy(
-                path,
-                format!(
-                    "{}/{}",
-                    iso_root,
-                    path.file_name().unwrap().to_str().unwrap()
-                ),
-            )
-            .expect(&format!("failed to copy file {}", file));
+            std::fs::copy(path, file_dest_path).expect(&format!("failed to copy file {}", file));
         }
     }
 
@@ -153,29 +170,30 @@ fn prepare_iso(
     }
 
     if !std::path::Path::new(&format!("target/limine/{}_done", plain_iso_file)).exists() {
+        let limine_path = root_dir.join("target/limine");
         std::fs::copy(
-            format!("target/limine/{}", limine_sys_file),
-            format!("{}/{}", iso_root, limine_sys_file),
+            limine_path.join(limine_sys_file),
+            iso_root.join(limine_sys_file),
         )
         .expect(&format!(
-            "failed to copy file {}/{}",
-            iso_root, limine_sys_file
+            "failed to copy file {}",
+            limine_path.join(limine_sys_file).to_string_lossy()
         ));
         std::fs::copy(
-            format!("target/limine/{}", limine_bios_cd_file),
-            format!("{}/{}", iso_root, limine_bios_cd_file),
+            limine_path.join(limine_bios_cd_file),
+            iso_root.join(limine_bios_cd_file),
         )
         .expect(&format!(
-            "failed to copy file {}/{}",
-            iso_root, limine_bios_cd_file
+            "failed to copy file {}",
+            limine_path.join(limine_bios_cd_file).to_string_lossy()
         ));
         std::fs::copy(
-            format!("target/limine/{}", limine_uefi_cd_file),
-            format!("{}/{}", iso_root, limine_uefi_cd_file),
+            limine_path.join(limine_uefi_cd_file),
+            iso_root.join(limine_uefi_cd_file),
         )
         .expect(&format!(
-            "failed to copy file {}/{}",
-            iso_root, limine_uefi_cd_file
+            "failed to copy file {}",
+            limine_path.join(limine_uefi_cd_file).to_string_lossy()
         ));
         files_changed = true;
     }
@@ -196,7 +214,7 @@ fn prepare_iso(
                 "--efi-boot-part",
                 "--efi-boot-image",
                 "--protective-msdos-label",
-                iso_root,
+                &iso_root.to_string_lossy(),
                 "-o",
                 iso_file,
                 "-quiet",
@@ -217,30 +235,36 @@ fn prepare_iso(
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
+    println!("{:?}", args);
     let mut args_iter = args.iter().skip(2);
+    println!("{:?}", std::env::vars());
+
+    //let target = std::env::var("TARGET").unwrap_or("x86_64".to_string());
+    let manifest_path = std::env::var("CARGO_MANIFEST_PATH").ok();
+    let pkg_name = std::env::var("CARGO_PKG_NAME").ok();
 
     let target_exe_path = args_iter
         .next()
         .expect("expected path to target executable");
-    let mut args_iter = args_iter.skip_while(|val| !val.starts_with("--manifest-path"));
 
     let mut cmd = cargo_metadata::MetadataCommand::new();
-
-    match args_iter.next() {
-        Some(p) if p == "--manifest-path" => {
-            cmd.manifest_path(args_iter.next().unwrap());
-        }
-        Some(p) => {
-            cmd.manifest_path(p.trim_start_matches("--manifest-path"));
-        }
-        None => {}
+    if let Some(manifest_path) = manifest_path {
+        cmd.manifest_path(manifest_path);
     }
 
     let metadata = cmd.exec().unwrap();
 
-    let root_package = metadata.root_package().expect("no root package found");
+    let package = match pkg_name {
+        Some(pkg_name) => metadata
+            .packages
+            .iter()
+            .find(|p| p.name == pkg_name)
+            .unwrap(),
+        None => metadata.root_package().unwrap(),
+    };
+    let root_dir = metadata.workspace_root.as_str();
 
-    let mut data: PackageMetadata = serde_json::from_value(root_package.metadata.clone())
+    let mut data: PackageMetadata = serde_json::from_value(package.metadata.clone())
         .expect("no [package.metadata.qemu_runner] entry specified");
 
     let mut target_dest_file = std::path::Path::new(target_exe_path)
@@ -259,6 +283,7 @@ fn main() {
 
     if !is_test {
         prepare_iso(
+            root_dir,
             "target/iso_root",
             "target/image.iso",
             target_exe_path,
@@ -272,6 +297,7 @@ fn main() {
         }
     } else {
         prepare_iso(
+            root_dir,
             "target/test_iso_root",
             "target/test_image.iso",
             target_exe_path,
@@ -288,7 +314,7 @@ fn main() {
     let run_exe = data
         .qemu_runner
         .run_command
-        .get(0)
+        .first()
         .expect("no run command provided");
     let mut run_command = Command::new(run_exe);
     run_command.args(data.qemu_runner.run_command.iter().skip(1));
