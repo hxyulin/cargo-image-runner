@@ -10,3 +10,5 @@ repository = "https://github.com/Qwinci/cargo-qemu-runner"
 cargo_metadata = "0.18.1"
 serde_json = "1.0.112"
 serde = { version = "1.0.196", features = ["derive"] }
+git2 = "0.20.0"
+indicatif = "0.17.9"

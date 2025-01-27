@@ -1,8 +1,11 @@
+use bootloader::prepare_bootloader;
+use iso::prepare_iso;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::Read;
 use std::path::PathBuf;
-use std::process::{exit, Command, Stdio};
+use std::process::{exit, Command};
+
+mod bootloader;
+mod iso;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub enum BootType {
@@ -41,192 +44,6 @@ struct RunnerMetadata {
 #[derive(Debug, Deserialize)]
 struct PackageMetadata {
     qemu_runner: RunnerMetadata,
-}
-
-fn is_file_equal(file1: &PathBuf, file2: &PathBuf) -> bool {
-    let mut f1 = File::open(file1).unwrap();
-    let f2 = File::open(file2);
-
-    if let Ok(mut f2) = f2 {
-        if f1.metadata().unwrap().len() != f2.metadata().unwrap().len() {
-            return false;
-        }
-
-        let mut vec1 = [0u8; 512];
-        let mut vec2 = [0u8; 512];
-        let mut count = 1;
-        while count > 0 {
-            if f1.read(&mut vec2).is_err() {
-                return false;
-            }
-
-            count = match f2.read(&mut vec1) {
-                Ok(count) => count,
-                _ => return false,
-            };
-
-            if vec1 != vec2 {
-                return false;
-            }
-        }
-
-        true
-    } else {
-        false
-    }
-}
-
-fn prepare_iso(
-    root_dir: &str,
-    iso_root: &str,
-    iso_file: &str,
-    target_exe_path: &str,
-    target_dst_name: &str,
-    config_file: &str,
-    extra_files: &Vec<String>,
-    limine_branch: &str,
-) {
-    let mut files_changed = false;
-
-    let root_dir = PathBuf::from(root_dir);
-    let iso_root = root_dir.join(iso_root);
-    std::fs::create_dir_all(&iso_root).unwrap();
-    let target_dest_path = iso_root.join(target_dst_name);
-    let target_exe_path = root_dir.join(target_exe_path);
-
-    if !is_file_equal(&target_exe_path, &target_dest_path) {
-        files_changed = true;
-        std::fs::copy(&target_exe_path, &target_dest_path).expect(&format!(
-            "failed to copy file {}",
-            target_exe_path.to_string_lossy()
-        ));
-    }
-
-    let config_path = root_dir.join(config_file);
-    let config_dest_path = iso_root.join(config_file);
-    if !is_file_equal(&config_path, &config_dest_path) {
-        files_changed = true;
-        // We need to do something, we need to format the contents of the config file with the
-        // exeucutable name as the first argument
-        let mut config_file_contents = std::fs::read_to_string(&config_path).unwrap();
-        config_file_contents = config_file_contents.replace("{{BINARY_NAME}}", target_dst_name);
-        std::fs::write(config_dest_path, config_file_contents).unwrap();
-    }
-
-    for file in extra_files.iter() {
-        let file_path = root_dir.join(file);
-        let file_dest_path = iso_root.join(file);
-        if !is_file_equal(&file_path, &file_dest_path) {
-            files_changed = true;
-            let path = std::path::Path::new(file);
-            std::fs::copy(path, file_dest_path).expect(&format!("failed to copy file {}", file));
-        }
-    }
-
-    if !std::path::Path::new("target/limine/done").exists() {
-        std::fs::remove_dir_all("target/limine").ok();
-        let mut git_cmd = Command::new("git")
-            .args(vec![
-                "clone",
-                "https://github.com/limine-bootloader/limine",
-                "-b",
-                limine_branch,
-                "--depth=1",
-                "target/limine",
-            ])
-            .spawn()
-            .expect("failed to git clone limine");
-        let status = git_cmd.wait().unwrap();
-        if !status.success() {
-            panic!("failed to git clone limine");
-        }
-
-        files_changed = true;
-
-        std::fs::write("target/limine/done", "").expect("failed to write to target/limine/done");
-    }
-
-    let plain_iso_file = std::path::Path::new(iso_file)
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap();
-
-    let limine_sys_file;
-    let limine_bios_cd_file;
-    let limine_uefi_cd_file;
-    if limine_branch.split_once('-').unwrap().0 == "v4.x" {
-        limine_sys_file = "limine.sys";
-        limine_bios_cd_file = "limine-cd.bin";
-        limine_uefi_cd_file = "limine-cd-efi.bin";
-    } else {
-        limine_sys_file = "limine-bios.sys";
-        limine_bios_cd_file = "limine-bios-cd.bin";
-        limine_uefi_cd_file = "limine-uefi-cd.bin";
-    }
-
-    if !std::path::Path::new(&format!("target/limine/{}_done", plain_iso_file)).exists() {
-        let limine_path = root_dir.join("target/limine");
-        std::fs::copy(
-            limine_path.join(limine_sys_file),
-            iso_root.join(limine_sys_file),
-        )
-        .expect(&format!(
-            "failed to copy file {}",
-            limine_path.join(limine_sys_file).to_string_lossy()
-        ));
-        std::fs::copy(
-            limine_path.join(limine_bios_cd_file),
-            iso_root.join(limine_bios_cd_file),
-        )
-        .expect(&format!(
-            "failed to copy file {}",
-            limine_path.join(limine_bios_cd_file).to_string_lossy()
-        ));
-        std::fs::copy(
-            limine_path.join(limine_uefi_cd_file),
-            iso_root.join(limine_uefi_cd_file),
-        )
-        .expect(&format!(
-            "failed to copy file {}",
-            limine_path.join(limine_uefi_cd_file).to_string_lossy()
-        ));
-        files_changed = true;
-    }
-
-    if files_changed {
-        let xorriso_cmd = Command::new("xorriso")
-            .args(vec![
-                "-as",
-                "mkisofs",
-                "-b",
-                limine_bios_cd_file,
-                "-no-emul-boot",
-                "-boot-load-size",
-                "4",
-                "-boot-info-table",
-                "--efi-boot",
-                limine_uefi_cd_file,
-                "--efi-boot-part",
-                "--efi-boot-image",
-                "--protective-msdos-label",
-                &iso_root.to_string_lossy(),
-                "-o",
-                iso_file,
-                "-quiet",
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("failed to start xorriso");
-        let status = xorriso_cmd.wait_with_output().unwrap();
-        if !status.status.success() {
-            panic!(
-                "failed to create iso file using xorriso: {}",
-                String::from_utf8(status.stderr).unwrap()
-            );
-        }
-    }
 }
 
 fn main() {
@@ -275,34 +92,39 @@ fn main() {
         }
     }
 
-    if !is_test {
-        prepare_iso(
-            root_dir,
-            "target/iso_root",
-            "target/image.iso",
-            target_exe_path,
-            target_dest_file,
-            data.qemu_runner.config_file.as_str(),
-            &data.qemu_runner.extra_files,
-            &data.qemu_runner.limine_branch,
-        );
-        for arg in data.qemu_runner.run_command.iter_mut() {
-            *arg = arg.replace("{}", "target/image.iso");
-        }
+    let root_dir = PathBuf::from(root_dir);
+    let file_dir = root_dir.join("target/qemu-runner");
+    prepare_bootloader(&data.qemu_runner.limine_branch, &file_dir);
+
+    let target_exe_path = root_dir.join(target_exe_path);
+    let target_dest_file = root_dir.join(target_dest_file);
+    let config_path = root_dir.join(data.qemu_runner.config_file.as_str());
+
+    let (iso_dir, iso_path) = if is_test {
+        let target_name = target_exe_path.to_string_lossy();
+        let target_name = target_name.rsplit_once('/').unwrap().1;
+        let tests_dir = file_dir.join("tests");
+        let iso_path = tests_dir.join(format!("{}.iso", target_name));
+        let iso_dir = tests_dir.join(format!("{}_isoroot", target_name));
+        (iso_dir, iso_path)
     } else {
-        prepare_iso(
-            root_dir,
-            "target/test_iso_root",
-            "target/test_image.iso",
-            target_exe_path,
-            target_dest_file,
-            data.qemu_runner.config_file.as_str(),
-            &data.qemu_runner.extra_files,
-            &data.qemu_runner.limine_branch,
-        );
-        for arg in data.qemu_runner.run_command.iter_mut() {
-            *arg = arg.replace("{}", "target/test_image.iso");
-        }
+        let iso_path = file_dir.join("image.iso");
+        let iso_dir = file_dir.join("iso_root");
+        (iso_dir, iso_path)
+    };
+
+    prepare_iso(
+        &root_dir,
+        &iso_dir,
+        &iso_path,
+        &target_exe_path,
+        &target_dest_file,
+        &config_path,
+        &data.qemu_runner.extra_files,
+        &data.qemu_runner.limine_branch,
+    );
+    for arg in data.qemu_runner.run_command.iter_mut() {
+        *arg = arg.replace("{}", &iso_path.to_string_lossy());
     }
 
     let run_exe = data
