@@ -1,6 +1,6 @@
 [package]
 name = "cargo-qemu-runner"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 license = "MIT"
 description = "A cargo subcommand that allows running Limine kernels using cargo run"

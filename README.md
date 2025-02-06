@@ -11,6 +11,7 @@
 - Specify these keys under `[package.metadata.qemu_runner]` section in `Cargo.toml`:
     - `limine-branch`, the limine binary branch to clone
 		- **NOTE: Only branches starting from v4.x are supported**
+	- `config-file`, specified path to the limine config file to use
     - `extra-files`, specifies extra files to copy to the resulting image
     - `test-success-exit-code`, qemu exit code which is considered success
     - `test-args`, extra arguments which are used along with `run-command` for tests
