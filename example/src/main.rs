@@ -6,14 +6,14 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-	loop {}
+    loop {}
 }
 
 #[no_mangle]
 extern "C" fn _start() {
-	loop {
-		unsafe {
-			asm!("hlt");
-		}
-	}
+    loop {
+        unsafe {
+            asm!("hlt");
+        }
+    }
 }

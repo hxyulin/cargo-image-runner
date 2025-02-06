@@ -6,11 +6,10 @@ edition = "2021"
 [dependencies]
 
 [package.metadata.qemu_runner]
-limine-branch = "v6.x-branch-binary"
+limine-branch = "v8.x-binary"
 
-extra-files = [
-    "limine.cfg"
-]
+config-file = "limine.conf"
+extra-files = []
 
 test-success-exit-code = 33
 
