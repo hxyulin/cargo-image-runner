@@ -81,4 +81,3 @@ pub fn prepare_bootloader(limine_branch: &str, file_dir: &PathBuf) {
 
     std::fs::write(&meta_path, limine_branch).expect("failed to write to target/limine/meta");
 }
-

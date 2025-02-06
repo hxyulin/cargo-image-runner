@@ -31,11 +31,13 @@ pub fn prepare_iso(
     let config_dest_path = iso_root.join(config_path.strip_prefix(&root_dir).unwrap());
     if !is_file_equal(&config_path, &config_dest_path) {
         files_changed = true;
-        // We need to do something, we need to format the contents of the config file with the
-        // exeucutable name as the first argument
+        // We need to format the contents of the config file with the
+        // executable name
         let mut config_file_contents = std::fs::read_to_string(&config_path).unwrap();
-        config_file_contents =
-            config_file_contents.replace("{{BINARY_NAME}}", &target_dst_path.file_name().unwrap().to_string_lossy());
+        config_file_contents = config_file_contents.replace(
+            "{{BINARY_NAME}}",
+            &target_dst_path.file_name().unwrap().to_string_lossy(),
+        );
         std::fs::write(config_dest_path, config_file_contents).unwrap();
     }
 
