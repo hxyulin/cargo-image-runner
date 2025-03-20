@@ -1,8 +1,11 @@
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::hash::{DefaultHasher, Hasher};
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+
+use iso9660_rs::file::FileInput;
+use iso9660_rs::{ElToritoOptions, FormatOptions, IsoImage};
 
 pub fn prepare_iso(
     root_dir: &PathBuf,
@@ -100,39 +103,32 @@ pub fn prepare_iso(
         files_changed = true;
     }
 
-    if files_changed {
-        let xorriso_cmd = Command::new("xorriso")
-            .args(vec![
-                "-as",
-                "mkisofs",
-                "-b",
-                limine_bios_cd_file,
-                "-no-emul-boot",
-                "-boot-load-size",
-                "4",
-                "-boot-info-table",
-                "--efi-boot",
-                limine_uefi_cd_file,
-                "--efi-boot-part",
-                "--efi-boot-image",
-                "--protective-msdos-label",
-                &iso_root.to_string_lossy(),
-                "-o",
-                &iso_path.to_string_lossy(),
-                "-quiet",
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("failed to start xorriso");
-        let status = xorriso_cmd.wait_with_output().unwrap();
-        if !status.status.success() {
-            panic!(
-                "failed to create iso file using xorriso: {}",
-                String::from_utf8(status.stderr).unwrap()
-            );
-        }
+    if !files_changed {
+        return;
     }
+
+    let options = FormatOptions {
+        files: FileInput::from_fs(iso_root.clone()).unwrap(),
+        protective_mbr: true,
+        el_torito: Some(ElToritoOptions {
+            load_size: 4,
+            boot_image_path: limine_bios_cd_file.to_string(),
+            boot_info_table: true,
+        })
+    };
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(iso_path)
+        .unwrap();
+    // TODO: In a future version we can make the file dynamically sized
+    const FILE_SIZE: u64 = 1024 * 1024 * 1024;
+    file.set_len(0).unwrap();
+    file.sync_data().unwrap();
+    file.set_len(FILE_SIZE).unwrap();
+    IsoImage::format_new(&mut file, options).unwrap();
+    file.sync_all().unwrap();
 }
 
 fn hash_file(path: &PathBuf) -> Option<u64> {

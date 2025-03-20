@@ -1,8 +1,5 @@
 # Limine Qemu Cargo Runner
 
-## Prerequisites
-- `xorriso` for creating the iso
-- `git` for downloading limine
 ## Installation
 - Git version: run `install.sh` or `cargo install --path .`
 - Release version: `cargo install cargo-qemu-runner`
@@ -22,6 +19,5 @@
 [Example config](https://github.com/Qwinci/cargo-qemu-runner/blob/main/example/Cargo.toml)
 
 ## Todo
-- Write a portable `xorriso` replacement in Rust
 - More configuration options?
 - Make it possible to have `cargo-qemu-runner` as a dev-dependency instead of requiring installation if possible

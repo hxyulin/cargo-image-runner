@@ -6,9 +6,16 @@ license = "MIT"
 description = "A cargo subcommand that allows running Limine kernels using cargo run"
 repository = "https://github.com/Qwinci/cargo-qemu-runner"
 
+[features]
+default = ["bios", "uefi"]
+bios = []
+uefi = ["dep:ovmf-prebuilt"]
+
 [dependencies]
+iso9660-rs = { git = "https://github.com/hxyulin/iso-rs", rev = "6178f42bce1cd3ff5d175dc7dedd2b71cf36fda6" }
 cargo_metadata = "0.18.1"
 serde_json = "1.0.137"
 serde = { version = "1.0.217", features = ["derive"] }
 git2 = "0.20.0"
 indicatif = "0.17.9"
+ovmf-prebuilt = { version = "0.2.2", optional = true }

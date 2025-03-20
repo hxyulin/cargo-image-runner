@@ -7,6 +7,7 @@ use std::process::{exit, Command};
 mod bootloader;
 mod iso;
 
+/// An enum representing the boot type to use
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub enum BootType {
     #[default]
@@ -36,9 +37,12 @@ struct RunnerMetadata {
     #[serde(rename = "test-success-exit-code")]
     #[serde(default)]
     test_success_exit_code: u32,
-    //#[serde(rename = "boot-type")]
-    //#[serde(default)]
-    //boot_type: BootType,
+    #[serde(rename = "boot-type")]
+    #[serde(default)]
+    boot_type: BootType,
+    /// The kernel command line to use
+    #[serde(default)]
+    cmdline: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +52,7 @@ struct PackageMetadata {
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
+    println!("{:?}", args);
     let mut args_iter = args.iter().skip(2);
 
     //let target = std::env::var("TARGET").unwrap_or("x86_64".to_string());
