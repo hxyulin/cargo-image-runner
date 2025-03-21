@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use hadris_iso::{
     BootEntryOptions, BootOptions, BootSectionOptions, EmulationType, FileInput, FormatOptions,
-    IsoImage, PartitionOptions, PlatformId,
+    IsoImage, PartitionOptions, PlatformId, Strictness,
 };
 
 pub fn prepare_iso(
@@ -17,6 +17,7 @@ pub fn prepare_iso(
     config_path: &PathBuf,
     extra_files: &Vec<String>,
     limine_branch: &str,
+    cmdline: &str,
 ) {
     let mut files_changed = false;
 
@@ -42,6 +43,7 @@ pub fn prepare_iso(
             "{{BINARY_NAME}}",
             &target_dst_path.file_name().unwrap().to_string_lossy(),
         );
+        config_file_contents = config_file_contents.replace("{{CMDLINE}}", cmdline);
         std::fs::write(config_dest_path, config_file_contents).unwrap();
     }
 
@@ -106,12 +108,34 @@ pub fn prepare_iso(
     }
 
     if !files_changed {
+        println!("No files changed, skipping iso creation");
         return;
     }
 
+    let entries = if cfg!(feature = "uefi") {
+        vec![(
+            BootSectionOptions {
+                platform_id: PlatformId::UEFI,
+            },
+            BootEntryOptions {
+                emulation: EmulationType::NoEmulation,
+                // 0 means the size of the file
+                load_size: 0,
+                boot_image_path: limine_uefi_cd_file.to_string(),
+                boot_info_table: false,
+                grub2_boot_info: false,
+            },
+        )]
+    } else {
+        vec![]
+    };
+
     let options = FormatOptions {
+        strictness: Strictness::Strict,
         files: FileInput::from_fs(iso_root.clone()).unwrap(),
-        format: PartitionOptions::PROTECTIVE_MBR,
+        // Only going to be used as CD/DVD boot, so we dont need MBR/GPT
+        format: PartitionOptions::empty(),
+        // We need to include the BIOS bootloader, because thats how El Torito boots
         boot: Some(BootOptions {
             write_boot_catalogue: true,
             default: BootEntryOptions {
@@ -121,24 +145,10 @@ pub fn prepare_iso(
                 boot_info_table: true,
                 grub2_boot_info: false,
             },
-            entries: vec![(
-                BootSectionOptions {
-                    platform_id: PlatformId::UEFI,
-                },
-                BootEntryOptions {
-                    emulation: EmulationType::NoEmulation,
-                    // 0 means the size of the file
-                    load_size: 0,
-                    boot_image_path: limine_uefi_cd_file.to_string(),
-                    boot_info_table: false,
-                    grub2_boot_info: false,
-                },
-            )],
+            entries,
         }),
     };
-    println!("Root dir: {:?}", iso_root);
-    println!("Options: {:?}", options);
-    IsoImage::<File>::format_file(iso_path, options).unwrap();
+    IsoImage::format_file(iso_path, options).unwrap();
 }
 
 fn hash_file(path: &PathBuf) -> Option<u64> {

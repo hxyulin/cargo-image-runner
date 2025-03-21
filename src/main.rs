@@ -52,7 +52,6 @@ struct PackageMetadata {
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
-    println!("{:?}", args);
     let mut args_iter = args.iter().skip(2);
 
     //let target = std::env::var("TARGET").unwrap_or("x86_64".to_string());
@@ -82,6 +81,15 @@ fn main() {
 
     let mut data: PackageMetadata = serde_json::from_value(package.metadata.clone())
         .expect("no [package.metadata.qemu_runner] entry specified");
+
+    #[cfg(not(feature = "bios"))]
+    if data.qemu_runner.boot_type == BootType::Bios {
+        panic!("bios boot type is not supported, enable the `bios` feature");
+    }
+    #[cfg(not(feature = "uefi"))]
+    if data.qemu_runner.boot_type == BootType::Uefi {
+        panic!("uefi boot type is not supported, enable the `uefi` feature");
+    }
 
     let mut target_dest_file = std::path::Path::new(target_exe_path)
         .file_name()
@@ -127,6 +135,7 @@ fn main() {
         &config_path,
         &data.qemu_runner.extra_files,
         &data.qemu_runner.limine_branch,
+        &data.qemu_runner.cmdline,
     );
     for arg in data.qemu_runner.run_command.iter_mut() {
         *arg = arg.replace("{}", &iso_path.to_string_lossy());
