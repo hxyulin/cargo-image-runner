@@ -1,44 +1,44 @@
 use std::fs::File;
 use std::hash::{DefaultHasher, Hasher};
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use hadris_iso::{
     BootEntryOptions, BootOptions, BootSectionOptions, EmulationType, FileInput, FormatOptions,
     IsoImage, PartitionOptions, PlatformId, Strictness,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn prepare_iso(
     root_dir: &PathBuf,
     iso_root: &PathBuf,
     iso_path: &PathBuf,
     target_exe_path: &PathBuf,
-    target_dst_path: &PathBuf,
+    target_dst_path: &Path,
     config_path: &PathBuf,
-    extra_files: &Vec<String>,
+    extra_files: &[String],
     limine_branch: &str,
     cmdline: &str,
 ) {
     let mut files_changed = false;
 
     let root_dir = PathBuf::from(root_dir);
-    std::fs::create_dir_all(&iso_root).unwrap();
+    std::fs::create_dir_all(iso_root).unwrap();
 
     let target_dst_path = iso_root.join(target_dst_path.file_name().unwrap());
-    if !is_file_equal(&target_exe_path, &target_dst_path) {
+    if !is_file_equal(target_exe_path, &target_dst_path) {
         files_changed = true;
-        std::fs::copy(&target_exe_path, &target_dst_path).expect(&format!(
-            "failed to copy file {}",
-            target_exe_path.to_string_lossy()
-        ));
+        std::fs::copy(target_exe_path, &target_dst_path).unwrap_or_else(|_| {
+            panic!("failed to copy file {}", target_exe_path.to_string_lossy())
+        });
     }
 
     let config_dest_path = iso_root.join(config_path.strip_prefix(&root_dir).unwrap());
-    if !is_file_equal(&config_path, &config_dest_path) {
+    if !is_file_equal(config_path, &config_dest_path) {
         files_changed = true;
         // We need to format the contents of the config file with the
         // executable name
-        let mut config_file_contents = std::fs::read_to_string(&config_path).unwrap();
+        let mut config_file_contents = std::fs::read_to_string(config_path).unwrap();
         config_file_contents = config_file_contents.replace(
             "{{BINARY_NAME}}",
             &target_dst_path.file_name().unwrap().to_string_lossy(),
@@ -53,7 +53,8 @@ pub fn prepare_iso(
         if !is_file_equal(&file_path, &file_dest_path) {
             files_changed = true;
             let path = std::path::Path::new(file);
-            std::fs::copy(path, file_dest_path).expect(&format!("failed to copy file {}", file));
+            std::fs::copy(path, file_dest_path)
+                .unwrap_or_else(|_| panic!("failed to copy file {}", file));
         }
     }
 
@@ -84,26 +85,32 @@ pub fn prepare_iso(
             limine_dir.join(limine_sys_file),
             iso_root.join(limine_sys_file),
         )
-        .expect(&format!(
-            "failed to copy file {}",
-            limine_dir.join(limine_sys_file).to_string_lossy()
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "failed to copy file {}",
+                limine_dir.join(limine_sys_file).to_string_lossy()
+            )
+        });
         std::fs::copy(
             limine_dir.join(limine_bios_cd_file),
             iso_root.join(limine_bios_cd_file),
         )
-        .expect(&format!(
-            "failed to copy file {}",
-            limine_dir.join(limine_bios_cd_file).to_string_lossy()
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "failed to copy file {}",
+                limine_dir.join(limine_bios_cd_file).to_string_lossy()
+            )
+        });
         std::fs::copy(
             limine_dir.join(limine_uefi_cd_file),
             iso_root.join(limine_uefi_cd_file),
         )
-        .expect(&format!(
-            "failed to copy file {}",
-            limine_dir.join(limine_uefi_cd_file).to_string_lossy()
-        ));
+        .unwrap_or_else(|_| {
+            panic!(
+                "failed to copy file {}",
+                limine_dir.join(limine_uefi_cd_file).to_string_lossy()
+            )
+        });
         files_changed = true;
     }
 

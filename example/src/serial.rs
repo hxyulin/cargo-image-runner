@@ -58,7 +58,7 @@ impl SerialPort {
             outb(self.line_ctrl(), 0x80);
 
             // Set divisor to 3 (lo byte) 38400 baud
-            outb(self.port + 0, 0x03);
+            outb(self.port, 0x03);
             outb(self.int_en(), 0x00); // Disable all interrupts
 
             // 8 bits, no parity, one stop bit

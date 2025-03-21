@@ -1,8 +1,8 @@
 use git2::{FetchOptions, RemoteCallbacks};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::path::PathBuf;
+use std::path::Path;
 
-pub fn prepare_bootloader(limine_branch: &str, file_dir: &PathBuf) {
+pub fn prepare_bootloader(limine_branch: &str, file_dir: &Path) {
     let limine_dir = file_dir.join("limine");
     let meta_path = limine_dir.join("done");
     let old_branch = std::fs::read_to_string(&meta_path).unwrap_or_default();
