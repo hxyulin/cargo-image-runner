@@ -138,6 +138,23 @@ fn main() {
         .first()
         .expect("no run command provided");
     let mut run_command = Command::new(run_exe);
+
+    if cfg!(feature = "uefi") && data.qemu_runner.boot_type == BootType::Uefi {
+        let ovmf =
+            ovmf_prebuilt::Prebuilt::fetch(ovmf_prebuilt::Source::LATEST, "target/ovmf").unwrap();
+        let code = ovmf.get_file(ovmf_prebuilt::Arch::X64, ovmf_prebuilt::FileType::Code);
+        let vars = ovmf.get_file(ovmf_prebuilt::Arch::X64, ovmf_prebuilt::FileType::Vars);
+
+        run_command
+            .arg("-drive")
+            .arg(format!(
+                "if=pflash,format=raw,readonly=on,file={}",
+                code.display()
+            ))
+            .arg("-drive")
+            .arg(format!("if=pflash,format=raw,file={}", vars.display()));
+    }
+
     run_command.args(data.qemu_runner.run_command.iter().skip(1));
     if is_test {
         run_command.args(data.qemu_runner.test_args);

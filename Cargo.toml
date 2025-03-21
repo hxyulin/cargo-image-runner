@@ -8,11 +8,16 @@ repository = "https://github.com/Qwinci/cargo-qemu-runner"
 
 [features]
 default = ["bios", "uefi"]
+# Enables the BIOS support
+# If this feature is enabled, the image may be bigger
 bios = []
+# Enables the UEFI support
+# If this feature is enabled, the OVMF image will be used as the qemu bios
+# And the image is significantly bigger
 uefi = ["dep:ovmf-prebuilt"]
 
 [dependencies]
-iso9660-rs = { git = "https://github.com/hxyulin/iso-rs", rev = "6178f42bce1cd3ff5d175dc7dedd2b71cf36fda6" }
+hadris-iso = { git = "https://github.com/hxyulin/hadris", rev = "a65a0425b11429bb774ca796d799cc0a3adbacb4" }
 cargo_metadata = "0.18.1"
 serde_json = "1.0.137"
 serde = { version = "1.0.217", features = ["derive"] }
