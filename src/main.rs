@@ -21,8 +21,8 @@ pub enum BootType {
 struct RunnerMetadata {
     #[serde(rename = "config-file")]
     config_file: String,
-    #[serde(rename = "extra-files")]
     #[serde(default)]
+    #[serde(rename = "extra-files")]
     extra_files: Vec<String>,
     #[serde(rename = "limine-branch")]
     limine_branch: String,

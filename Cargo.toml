@@ -17,10 +17,10 @@ bios = []
 uefi = ["dep:ovmf-prebuilt"]
 
 [dependencies]
-hadris-iso = { git = "https://github.com/hxyulin/hadris", rev = "a98f4436535da6a0f257f420e170e9ced45f38d8" }
 cargo_metadata = "0.18.1"
 serde_json = "1.0.137"
 serde = { version = "1.0.217", features = ["derive"] }
 git2 = "0.20.0"
 indicatif = "0.17.9"
 ovmf-prebuilt = { version = "0.2.2", optional = true }
+hadris-iso = "0.0.2"

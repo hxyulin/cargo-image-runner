@@ -4,8 +4,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use hadris_iso::{
-    BootEntryOptions, BootOptions, BootSectionOptions, EmulationType, FileInput, FormatOptions,
-    IsoImage, PartitionOptions, PlatformId, Strictness,
+    BootEntryOptions, BootOptions, BootSectionOptions, EmulationType, FileInput, FileInterchange,
+    FormatOptions, IsoImage, PartitionOptions, PlatformId, Strictness,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -52,9 +52,8 @@ pub fn prepare_iso(
         let file_dest_path = iso_root.join(file);
         if !is_file_equal(&file_path, &file_dest_path) {
             files_changed = true;
-            let path = std::path::Path::new(file);
-            std::fs::copy(path, file_dest_path)
-                .unwrap_or_else(|_| panic!("failed to copy file {}", file));
+            std::fs::copy(&file_path, file_dest_path)
+                .unwrap_or_else(|_| panic!("failed to copy file {}", file_path.display()));
         }
     }
 
@@ -114,6 +113,20 @@ pub fn prepare_iso(
         files_changed = true;
     }
 
+    let boot_dir = iso_root.join("EFI/BOOT");
+    if !boot_dir.exists() {
+        std::fs::create_dir_all(&boot_dir).unwrap();
+        files_changed = true;
+    }
+    // TODO: Support other platforms
+    let uefi_img_dest_path = boot_dir.join("BOOTX64.EFI");
+    let uefi_img_src_path = limine_dir.join("BOOTX64.EFI");
+    if !is_file_equal(&uefi_img_src_path, &uefi_img_dest_path) {
+        std::fs::copy(&uefi_img_src_path, uefi_img_dest_path)
+            .unwrap_or_else(|_| panic!("failed to copy file {}", uefi_img_src_path.display()));
+        files_changed = true;
+    }
+
     if !files_changed {
         println!("No files changed, skipping iso creation");
         return;
@@ -138,10 +151,13 @@ pub fn prepare_iso(
     };
 
     let options = FormatOptions {
+        volume_name: "LIMINE".to_string(),
         strictness: Strictness::Strict,
         files: FileInput::from_fs(iso_root.clone()).unwrap(),
         // Only going to be used as CD/DVD boot, so we dont need MBR/GPT
         format: PartitionOptions::empty(),
+        level: FileInterchange::NonConformant,
+        system_area: None,
         // We need to include the BIOS bootloader, because thats how El Torito boots
         boot: Some(BootOptions {
             write_boot_catalogue: true,
