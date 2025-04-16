@@ -1,0 +1,25 @@
+name: Build and test Cargo Image Runner
+
+on:
+  push:
+  pull_request:
+
+env: 
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    name: Rust project - latest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - nightly
+          - stable
+          - beta
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: cargo build --verbose
+      - run: cargo test --verbose
+  

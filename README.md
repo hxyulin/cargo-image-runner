@@ -19,4 +19,4 @@ A version of limine and ovmf are downloaded at runtime, which requires a network
 
 ## License
 
-This is forked from the [cargo-image-runner](https://github.com/Qwinci/cargo-image-runner) project, which is licensed under the MIT license.
+This is forked from the [cargo-qemu-runner](https://github.com/Qwinci/cargo-qemu-runner) project, which is licensed under the MIT license.
