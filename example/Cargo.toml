@@ -4,19 +4,29 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+uart_16550 = { version = "0.3.2", features = ["nightly"] }
 
-[package.metadata.qemu_runner]
+[package.metadata.image-runner]
+# Limine branch to use
+# You should be using the binary branch, and not the source branch
 limine-branch = "v8.x-binary"
 
+# The limine config file to use
+# Note that this file can either be limine.cfg or limine.conf, depending on the limine version
 config-file = "limine.conf"
+# Extra files to copy, if you have modules, or any other files you want to include
 extra-files = []
 
+# The boot type to use
+# You can use "bios" or "uefi"
+# Feel free to change it to test out UEFI
 boot-type = "bios"
-# Uncomment the following line to use the UEFI bootloader
-# boot-type = "uefi"
 
+# The exit code to use for successful tests
+# You must set it to this for qemu to indicate success when testing
 test-success-exit-code = 33
 
+# Arguments to pass to qemu when testing
 test-args = [
     "-device",
     "isa-debug-exit,iobase=0xf4,iosize=0x4",
@@ -26,22 +36,15 @@ test-args = [
     "none",
 ]
 
-run-args = ["-d", "int", "-no-reboot", "-no-shutdown", "-serial", "stdio"]
+# Arguments to pass to qemu when running
+run-args = ["-no-reboot", "-serial", "stdio"]
 
+# The base run command to use
 run-command = [
     "qemu-system-x86_64",
-    "-boot",
-    "d",
     "-cdrom",
     "{}",
-    "-m",
-    "200M",
-    "-machine",
-    "q35",
-    "-cpu",
-    "qemu64",
-    "-smp",
-    "2",
 ]
 
-cmdline = "TEST"
+# We can specify the kernel command line here
+# cmdline = "command line arguments..."

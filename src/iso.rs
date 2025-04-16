@@ -78,7 +78,7 @@ pub fn prepare_iso(
 
     // TODO: Make proper
 
-    let limine_dir = root_dir.join("target/qemu-runner/limine");
+    let limine_dir = root_dir.join("target/image-runner/limine");
     if !limine_dir.join(format!("{}_done", plain_iso_file)).exists() {
         std::fs::copy(
             limine_dir.join(limine_sys_file),

@@ -101,17 +101,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo-platform"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e35af189006b9c0f00a064685c727031e3ed2d8020f7ba284d78cc2671bd36ea"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "cargo-qemu-runner"
-version = "0.1.4"
+name = "cargo-image-runner"
+version = "0.1.0"
 dependencies = [
  "cargo_metadata",
  "git2",
@@ -120,6 +111,15 @@ dependencies = [
  "ovmf-prebuilt",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "cargo-platform"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e35af189006b9c0f00a064685c727031e3ed2d8020f7ba284d78cc2671bd36ea"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

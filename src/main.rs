@@ -47,7 +47,8 @@ struct RunnerMetadata {
 
 #[derive(Debug, Deserialize)]
 struct PackageMetadata {
-    qemu_runner: RunnerMetadata,
+    #[serde(rename = "image-runner")]
+    image_runner: RunnerMetadata,
 }
 
 fn main() {
@@ -80,14 +81,14 @@ fn main() {
     let root_dir = metadata.workspace_root.as_str();
 
     let mut data: PackageMetadata = serde_json::from_value(package.metadata.clone())
-        .expect("no [package.metadata.qemu_runner] entry specified");
+        .expect("no [package.metadata.image-runner] entry specified");
 
     #[cfg(not(feature = "bios"))]
-    if data.qemu_runner.boot_type == BootType::Bios {
+    if data.image_runner.boot_type == BootType::Bios {
         panic!("bios boot type is not supported, enable the `bios` feature");
     }
     #[cfg(not(feature = "uefi"))]
-    if data.qemu_runner.boot_type == BootType::Uefi {
+    if data.image_runner.boot_type == BootType::Uefi {
         panic!("uefi boot type is not supported, enable the `uefi` feature");
     }
 
@@ -106,12 +107,12 @@ fn main() {
     }
 
     let root_dir = PathBuf::from(root_dir);
-    let file_dir = root_dir.join("target/qemu-runner");
-    prepare_bootloader(&data.qemu_runner.limine_branch, &file_dir);
+    let file_dir = root_dir.join("target/image-runner");
+    prepare_bootloader(&data.image_runner.limine_branch, &file_dir);
 
     let target_exe_path = root_dir.join(target_exe_path);
     let target_dest_file = root_dir.join(target_dest_file);
-    let config_path = root_dir.join(data.qemu_runner.config_file.as_str());
+    let config_path = root_dir.join(data.image_runner.config_file.as_str());
 
     let (iso_dir, iso_path) = if is_test {
         let target_name = target_exe_path.to_string_lossy();
@@ -133,22 +134,22 @@ fn main() {
         &target_exe_path,
         &target_dest_file,
         &config_path,
-        &data.qemu_runner.extra_files,
-        &data.qemu_runner.limine_branch,
-        &data.qemu_runner.cmdline,
+        &data.image_runner.extra_files,
+        &data.image_runner.limine_branch,
+        &data.image_runner.cmdline,
     );
-    for arg in data.qemu_runner.run_command.iter_mut() {
+    for arg in data.image_runner.run_command.iter_mut() {
         *arg = arg.replace("{}", &iso_path.to_string_lossy());
     }
 
     let run_exe = data
-        .qemu_runner
+        .image_runner
         .run_command
         .first()
         .expect("no run command provided");
     let mut run_command = Command::new(run_exe);
 
-    if cfg!(feature = "uefi") && data.qemu_runner.boot_type == BootType::Uefi {
+    if cfg!(feature = "uefi") && data.image_runner.boot_type == BootType::Uefi {
         let ovmf =
             ovmf_prebuilt::Prebuilt::fetch(ovmf_prebuilt::Source::LATEST, "target/ovmf").unwrap();
         let code = ovmf.get_file(ovmf_prebuilt::Arch::X64, ovmf_prebuilt::FileType::Code);
@@ -164,11 +165,11 @@ fn main() {
             .arg(format!("if=pflash,format=raw,file={}", vars.display()));
     }
 
-    run_command.args(data.qemu_runner.run_command.iter().skip(1));
+    run_command.args(data.image_runner.run_command.iter().skip(1));
     if is_test {
-        run_command.args(data.qemu_runner.test_args);
+        run_command.args(data.image_runner.test_args);
     } else {
-        run_command.args(data.qemu_runner.run_args);
+        run_command.args(data.image_runner.run_args);
     }
 
     let mut run_command = run_command.spawn().expect("run command failed");
@@ -179,7 +180,7 @@ fn main() {
         }
     } else {
         let code = status.code().unwrap_or(i32::MAX);
-        if code as u32 != data.qemu_runner.test_success_exit_code {
+        if code as u32 != data.image_runner.test_success_exit_code {
             exit(code);
         }
     }

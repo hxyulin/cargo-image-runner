@@ -8,29 +8,39 @@ use core::arch::asm;
 use core::fmt::Write;
 use core::panic::PanicInfo;
 
-mod serial;
+use uart_16550::SerialPort;
+
+// You probably shouldn't use a static mutable in a real project, instead use a Mutex or RwLock
+static mut SERIAL: SerialPort = unsafe { SerialPort::new(0x3F8) };
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    let mut serial_port = unsafe { serial::SerialPort::new(0x3F8) };
+    #[allow(static_mut_refs)]
+    let serial_port = unsafe { &mut SERIAL };
     #[cfg(test)]
     {
         serial_port.write_str("[fail]\n").unwrap();
+        serial_port.write_fmt(format_args!("{}\n", info)).unwrap();
         tests::exit_qemu(tests::ExitCode::Failed);
     }
-    serial_port
-        .write_fmt(format_args!("Kernel Panic: {}", info))
-        .unwrap();
-    loop {
-        unsafe {
-            asm!("hlt");
+    #[cfg(not(test))]
+    {
+        serial_port
+            .write_fmt(format_args!("Kernel Panic: {}", info))
+            .unwrap();
+        loop {
+            unsafe {
+                asm!("hlt");
+            }
         }
     }
 }
 
 #[no_mangle]
 extern "C" fn _start() -> ! {
-    let mut serial_port = unsafe { serial::SerialPort::new(0x3F8) };
+    #[allow(static_mut_refs)]
+    let serial_port = unsafe { &mut SERIAL };
+    serial_port.init();
     serial_port.write_str("Hello, world!\n").unwrap();
     #[cfg(test)]
     {
@@ -74,7 +84,8 @@ mod tests {
     }
 
     pub fn runner(tests: &[&dyn Testable]) {
-        let mut serial_port = unsafe { serial::SerialPort::new(0x3F8) };
+        #[allow(static_mut_refs)]
+        let serial_port = unsafe { &mut SERIAL };
         for test in tests {
             serial_port
                 .write_fmt(format_args!("Running test {}...  ", test.name()))
@@ -88,5 +99,10 @@ mod tests {
     #[test_case]
     fn basic_test() {
         assert!(true);
+    }
+
+    #[test_case]
+    fn panic_test() {
+        panic!("Panic test");
     }
 }

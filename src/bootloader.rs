@@ -2,14 +2,18 @@ use git2::{FetchOptions, RemoteCallbacks};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::path::Path;
 
+/// Prepares the limine bootloader
 pub fn prepare_bootloader(limine_branch: &str, file_dir: &Path) {
     let limine_dir = file_dir.join("limine");
-    let meta_path = limine_dir.join("done");
+    // Stores the old version, so that the crate re-clones if the branch has changed
+    let meta_path = limine_dir.join("meta.old");
     let old_branch = std::fs::read_to_string(&meta_path).unwrap_or_default();
     if old_branch == limine_branch {
+        // Nothing to do
         return;
     }
 
+    // We first remove the old version, so that we can re-clone
     std::fs::remove_dir_all(&limine_dir).ok();
 
     let multi = MultiProgress::new();

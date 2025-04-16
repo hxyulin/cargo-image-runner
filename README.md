@@ -1,26 +1,22 @@
-# Limine Qemu Cargo Runner
+# Cargo Image Runner
 
-## Installation
-- Git version: run `install.sh` or `cargo install --path .`
-- Release version: `cargo install cargo-qemu-runner`
-## Usage
-- Put `runner = "cargo qemu-runner"` in your `.cargo/config.toml`'s `[target]` section
-- Create a `limine.conf` (or `limine.cfg` for older versions), and when specifying the kernel path, use `{{BINARY_PATH}}`, and `{{CMDLINE}}` for the cmdline
-- Specify these keys under `[package.metadata.qemu_runner]` section in `Cargo.toml`:
-    - `limine-branch`, the limine binary branch to clone
-		- **NOTE: Only branches starting from v4.x are supported**
-	- `config-file`, specified path to the limine config file to use
-    - `extra-files`, specifies extra files to copy to the resulting image
-    - `test-success-exit-code`, qemu exit code which is considered success
-    - `test-args`, extra arguments which are used along with `run-command` for tests
-    - `run-args`, extra arguments which are used along with `run-command`
-    - `run-command`, base command used to run qemu
-    - `cmdline`, optional cmdline to use for qemu
-- Now you can `cargo run` your kernel and it will automatically launch it in qemu
+A cargo CLI tool / runner that allows building ISO images from your rust executables and running them in qemu.
+Currently only supports x86_64 and UEFI booting, and the limine bootloader.
 
-[Example config](https://github.com/Qwinci/cargo-qemu-runner/blob/main/example/Cargo.toml)
+## Dependencies
 
-## Todo
-- More configuration options?
-- Make it possible to have `cargo-qemu-runner` as a dev-dependency instead of requiring installation if possible
-- Create examples using the limine boot protocol
+For cross-platform compatibility, this crate is mosly self-contained, bundling a version of git2 and [hadris-iso](https://github.com/hxyulin/hadris) to create the ISO image.
+A version of limine and ovmf are downloaded at runtime, which requires a network connection for the first run.
+
+> Note: A fully bundled version of limine and ovmf is planned for the future.
+
+## Roadmap
+
+- [ ] Add support for other bootloaders (GRUB, etc.)
+- [ ] Add support for other architectures (aarch64, etc.)
+- [ ] Make bundling git2 optional (use system libssl, libgit2, or use the command line git)
+- [ ] Add support for bundling limine (latest stable release) and ovmf (latest stable release), but allow per project overrides
+
+## License
+
+This is forked from the [cargo-image-runner](https://github.com/Qwinci/cargo-image-runner) project, which is licensed under the MIT license.
