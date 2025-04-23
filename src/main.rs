@@ -2,7 +2,7 @@ use bootloader::prepare_bootloader;
 use iso::prepare_iso;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 mod bootloader;
 mod iso;
@@ -80,8 +80,12 @@ fn main() {
     };
     let root_dir = metadata.workspace_root.as_str();
 
+    // TODO: This gives a wrong error message if the metadata is not found
     let mut data: PackageMetadata = serde_json::from_value(package.metadata.clone())
-        .expect("no [package.metadata.image-runner] entry specified");
+        .unwrap_or_else(|_| {
+            serde_json::from_value(metadata.workspace_metadata.clone())
+                .expect("no [package.metadata.image-runner] entry specified")
+        });
 
     #[cfg(not(feature = "bios"))]
     if data.image_runner.boot_type == BootType::Bios {
