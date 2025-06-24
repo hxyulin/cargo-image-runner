@@ -1,4 +1,6 @@
+#[cfg(feature = "bundle-git")]
 use git2::{FetchOptions, RemoteCallbacks};
+#[cfg(feature = "pretty-output")]
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::path::Path;
 
@@ -15,73 +17,92 @@ pub fn prepare_bootloader(limine_branch: &str, file_dir: &Path) {
 
     // We first remove the old version, so that we can re-clone
     std::fs::remove_dir_all(&limine_dir).ok();
+    #[cfg(feature = "bundle-git")]
+    {
+        #[cfg(feature = "pretty-output")]
+        let (multi, pb) = {
+            let multi = MultiProgress::new();
+            let pb = multi.add(ProgressBar::new(100));
+            pb.set_style(ProgressStyle::default_bar()
+                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) {msg}")
+                .unwrap()
+                .progress_chars("#>-"));
 
-    let multi = MultiProgress::new();
-    let pb = multi.add(ProgressBar::new(100));
-    pb.set_style(ProgressStyle::default_bar()
-        .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) {msg}")
-        .unwrap()
-        .progress_chars("#>-"));
+            pb.set_message("Cloning limine...");
+            (multi, pb)
+        };
 
-    pb.set_message("Cloning limine...");
-    let start_time = std::time::Instant::now();
+        let start_time = std::time::Instant::now();
 
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.transfer_progress(|stats| {
-        // Rough calculations, we just do integer division
-        let progress = stats.received_objects() * 100 / stats.total_objects();
-        pb.set_position(progress as u64);
-        pb.set_message(format!(
-            "Objects: {}/{}, Deltas: {}/{}",
-            stats.received_objects(),
-            stats.total_objects(),
-            stats.indexed_deltas(),
-            stats.total_deltas()
+        #[cfg(feature = "pretty-output")]
+        let mut callbacks = {
+            let mut callbacks = RemoteCallbacks::new();
+            callbacks.transfer_progress(|stats| {
+                // Rough calculations, we just do integer division
+                let progress = stats.received_objects() * 100 / stats.total_objects();
+                pb.set_position(progress as u64);
+                pb.set_message(format!(
+                    "Objects: {}/{}, Deltas: {}/{}",
+                    stats.received_objects(),
+                    stats.total_objects(),
+                    stats.indexed_deltas(),
+                    stats.total_deltas()
+                ));
+                true
+            });
+            callbacks
+        };
+
+        let mut fetch_options = FetchOptions::new();
+        #[cfg(feature = "pretty-output")]
+        fetch_options.remote_callbacks(callbacks);
+        fetch_options.depth(1);
+        fetch_options.download_tags(git2::AutotagOption::None);
+        fetch_options.update_fetchhead(false);
+
+        let mut builder = git2::build::RepoBuilder::new();
+        builder.fetch_options(fetch_options);
+        builder.branch(limine_branch);
+
+        const LIMINE_GIT: &str = "https://github.com/limine-bootloader/limine";
+        let repo = builder.clone(LIMINE_GIT, &limine_dir).unwrap();
+
+        let duration = std::time::Instant::now()
+            .duration_since(start_time)
+            .as_secs_f32();
+
+        #[cfg(feature = "pretty-output")]
+        pb.finish_with_message(format!("Clone completed in {:.2}s", duration));
+
+        #[cfg(feature = "pretty-output")]
+        let checkout_pb = {
+            let checkout_pb = multi.add(ProgressBar::new_spinner());
+            checkout_pb.set_style(
+                ProgressStyle::default_spinner()
+                    .template("{spinner:.blue} {msg}")
+                    .unwrap(),
+            );
+            checkout_pb.set_message(format!("Checking out branch {}", limine_branch));
+            checkout_pb
+        };
+
+        let obj = repo
+            .revparse_single(&format!("origin/{}", limine_branch))
+            .unwrap();
+        repo.checkout_tree(&obj, None).unwrap();
+        repo.set_head(&format!("refs/heads/{}", limine_branch))
+            .unwrap();
+
+        let duration = std::time::Instant::now()
+            .duration_since(start_time)
+            .as_secs_f32();
+        println!();
+        #[cfg(feature = "pretty-output")]
+        checkout_pb.finish_with_message(format!(
+            "Branch {} checked out in {:.2}s",
+            limine_branch, duration
         ));
-        true
-    });
-
-    let mut fetch_options = FetchOptions::new();
-    fetch_options.remote_callbacks(callbacks);
-    fetch_options.depth(1);
-    fetch_options.download_tags(git2::AutotagOption::None);
-    fetch_options.update_fetchhead(false);
-
-    let mut builder = git2::build::RepoBuilder::new();
-    builder.fetch_options(fetch_options);
-    builder.branch(limine_branch);
-
-    const LIMINE_GIT: &str = "https://github.com/limine-bootloader/limine";
-    let repo = builder.clone(LIMINE_GIT, &limine_dir).unwrap();
-
-    let duration = std::time::Instant::now()
-        .duration_since(start_time)
-        .as_secs_f32();
-    pb.finish_with_message(format!("Clone completed in {:.2}s", duration));
-
-    let checkout_pb = multi.add(ProgressBar::new_spinner());
-    checkout_pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.blue} {msg}")
-            .unwrap(),
-    );
-    checkout_pb.set_message(format!("Checking out branch {}", limine_branch));
-
-    let obj = repo
-        .revparse_single(&format!("origin/{}", limine_branch))
-        .unwrap();
-    repo.checkout_tree(&obj, None).unwrap();
-    repo.set_head(&format!("refs/heads/{}", limine_branch))
-        .unwrap();
-
-    let duration = std::time::Instant::now()
-        .duration_since(start_time)
-        .as_secs_f32();
-    println!();
-    checkout_pb.finish_with_message(format!(
-        "Branch {} checked out in {:.2}s",
-        limine_branch, duration
-    ));
+    }
 
     std::fs::write(&meta_path, limine_branch).expect("failed to write to target/limine/meta");
 }

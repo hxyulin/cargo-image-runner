@@ -3,7 +3,7 @@ name = "cargo-image-runner"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "A cargo subcommand that allows running kernels using cargo run"
+description = "A cargo subcommand that allows running kernels and other images using cargo run"
 repository = "https://github.com/hxyulin/cargo-image-runner"
 
 [features]
@@ -15,12 +15,16 @@ bios = []
 # If this feature is enabled, the OVMF image will be used as the qemu bios
 # And the image is significantly bigger
 uefi = ["dep:ovmf-prebuilt"]
+# bundles a version of git
+bundle-git = ["dep:git2"]
+pretty-output = ["dep:indicatif"]
 
 [dependencies]
 cargo_metadata = "0.18.1"
 serde_json = "1.0.137"
 serde = { version = "1.0.217", features = ["derive"] }
-git2 = "0.20.0"
-indicatif = "0.17.9"
+git2 = { version = "0.20.0", optional = true }
+indicatif = { version = "0.17.9", optional = true }
 ovmf-prebuilt = { version = "0.2.2", optional = true }
 hadris-iso = "0.0.2"
+serde_plain = "1.0.2"

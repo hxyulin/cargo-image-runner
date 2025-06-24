@@ -28,23 +28,21 @@ test-success-exit-code = 33
 
 # Arguments to pass to qemu when testing
 test-args = [
-    "-device",
-    "isa-debug-exit,iobase=0xf4,iosize=0x4",
-    "-serial",
-    "stdio",
-    "-display",
-    "none",
+  "-device",
+  "isa-debug-exit,iobase=0xf4,iosize=0x4",
+  "-serial",
+  "stdio",
+  "-display",
+  "none",
 ]
 
 # Arguments to pass to qemu when running
 run-args = ["-no-reboot", "-serial", "stdio"]
 
-# The base run command to use
-run-command = [
-    "qemu-system-x86_64",
-    "-cdrom",
-    "{}",
-]
+# variables here, we can use this customize what we can customize using the cli
+vars = { machine = "q35" }
 
+# The base run command to use
+run-command = ["qemu-system-x86_64", "-cdrom", "{}", "-machine", "$machine"]
 # We can specify the kernel command line here
 # cmdline = "command line arguments..."

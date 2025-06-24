@@ -26,7 +26,7 @@ fn panic(info: &PanicInfo) -> ! {
     #[cfg(not(test))]
     {
         serial_port
-            .write_fmt(format_args!("Kernel Panic: {}", info))
+            .write_fmt(format_args!("Kernel Panic: {}\n", info))
             .unwrap();
         loop {
             unsafe {

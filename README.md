@@ -15,6 +15,8 @@ A version of limine and ovmf are downloaded at runtime, which requires a network
 - [ ] Add support for other bootloaders (GRUB, etc.)
 - [ ] Add support for other architectures (aarch64, etc.)
 - [ ] Make bundling git2 optional (use system libssl, libgit2, or use the command line git)
+    - [x] optional bundling git2 (using cmdline)
+    - [ ] support dynamic linking libssl and libgit2
 - [ ] Add support for bundling limine (latest stable release) and ovmf (latest stable release), but allow per project overrides
 
 ## License
