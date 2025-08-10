@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::Value;
-
 /// An enum representing the boot type to use
 #[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub enum BootType {
