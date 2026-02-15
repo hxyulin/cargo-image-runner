@@ -1,6 +1,10 @@
+[workspace]
+members = [".", "examples/*"]
+default-members = ["."]
+
 [package]
 name = "cargo-image-runner"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 description = "A generic, customizable runner for building and booting kernel/embedded images with Limine, GRUB, QEMU, and more"
@@ -10,7 +14,7 @@ readme = "README.md"
 documentation = "https://docs.rs/cargo-image-runner"
 keywords = ["kernel", "bootloader", "qemu", "limine", "osdev"]
 categories = ["development-tools", "os", "command-line-utilities"]
-exclude = ["test-limine/", ".github/", "CLAUDE.md"]
+exclude = [".github/", "CLAUDE.md"]
 
 [features]
 default = ["uefi", "bios", "limine", "iso", "qemu"]
@@ -24,7 +28,7 @@ limine = ["dep:git2"]
 grub = []
 
 # Image formats
-iso = ["dep:hadris-iso"]
+iso = ["dep:hadris-iso", "dep:hadris-fat"]
 fat = ["dep:fatfs", "dep:fscommon"]
 
 # Runners
@@ -45,8 +49,12 @@ toml = "0.8"
 
 # Optional dependencies
 git2 = { version = "0.20", optional = true }
-hadris-iso = { version = "0.2.0", optional = true }
+hadris-iso = { version = "0.2.1", optional = true }
+hadris-fat = { version = "0.3.1", optional = true, features = ["write", "lfn"] }
 fatfs = { version = "0.3", optional = true, features = ["std"] }
 fscommon = { version = "0.1", optional = true }
 ovmf-prebuilt = { version = "0.2.2", optional = true }
 indicatif = { version = "0.17", optional = true }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,16 @@
+[package]
+name = "uefi-simple"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[package.metadata.image-runner.boot]
+type = "uefi"
+
+[package.metadata.image-runner.bootloader]
+kind = "none"
+
+[package.metadata.image-runner.image]
+format = "directory"
+
+[dependencies]

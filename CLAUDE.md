@@ -3,10 +3,12 @@
 ## Build & Test
 
 ```bash
-cargo build                  # build with default features
-cargo test                   # run all tests
+cargo build                  # build main crate (default features)
+cargo test                   # run all unit + integration tests
 cargo build --no-default-features --features "uefi,limine,iso,qemu"  # selective features
 ```
+
+**Workspace structure**: Cargo workspace with `default-members = ["."]`. Examples under `examples/` are `no_std` kernel stubs targeting `x86_64-unknown-none` — they are workspace members but not built by default.
 
 **Feature flags** (default: `uefi`, `bios`, `limine`, `iso`, `qemu`):
 - Boot types: `bios`, `uefi` (pulls `ovmf-prebuilt`)
@@ -15,7 +17,7 @@ cargo build --no-default-features --features "uefi,limine,iso,qemu"  # selective
 - Runners: `qemu`
 - Optional: `progress` (pulls `indicatif`)
 
-**CI**: Runs `cargo build && cargo test` on stable, beta, nightly (see `.github/workflows/ci.yml`).
+**CI**: Runs `cargo build && cargo test` on stable, beta, nightly + feature combination matrix (see `.github/workflows/ci.yml`).
 
 **Edition**: Rust 2024 — requires nightly or recent stable.
 
@@ -38,6 +40,24 @@ Entry point is the **builder pattern** (`builder()` → `ImageRunnerBuilder` →
 | `runner/` | `Runner` trait + impl: `qemu` |
 | `firmware/` | UEFI firmware (`ovmf`) |
 | `util/` | Filesystem helpers (`fs`), hashing (`hash`) |
+
+## Examples
+
+Located under `examples/`, each demonstrating a different configuration combination:
+
+| Example | Boot | Bootloader | Image |
+|---|---|---|---|
+| `uefi-simple` | UEFI | None | Directory |
+| `limine-directory` | Hybrid | Limine | Directory |
+| `limine-iso` | Hybrid | Limine | ISO |
+| `uefi-fat` | UEFI | None | FAT |
+| `limine-fat` | UEFI | Limine | FAT |
+| `bios-limine-iso` | BIOS | Limine | ISO |
+
+## Tests
+
+- **Unit tests**: In-module `#[cfg(test)]` blocks in `core/context.rs`, `core/builder.rs`, `config/loader.rs`, `config/mod.rs`, `util/fs.rs`, `util/hash.rs`, `image/template.rs`, `bootloader/mod.rs`, `core/error.rs`
+- **Integration tests**: `tests/config_integration.rs`, `tests/builder_pipeline.rs`, `tests/template_integration.rs`
 
 ## Key Patterns
 

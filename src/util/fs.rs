@@ -51,3 +51,62 @@ pub fn check_command_available(cmd: &str) -> bool {
         .status()
         .is_ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ensure_dir_exists_creates_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let new_dir = dir.path().join("subdir");
+        assert!(!new_dir.exists());
+
+        ensure_dir_exists(&new_dir).unwrap();
+        assert!(new_dir.exists());
+        assert!(new_dir.is_dir());
+    }
+
+    #[test]
+    fn test_ensure_dir_exists_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        let new_dir = dir.path().join("subdir");
+
+        ensure_dir_exists(&new_dir).unwrap();
+        ensure_dir_exists(&new_dir).unwrap();
+        assert!(new_dir.exists());
+    }
+
+    #[test]
+    fn test_copy_file_success() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("source.txt");
+        let dst = dir.path().join("dest.txt");
+        std::fs::write(&src, b"hello world").unwrap();
+
+        copy_file(&src, &dst).unwrap();
+        assert_eq!(std::fs::read_to_string(&dst).unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_copy_file_creates_parent_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("source.txt");
+        let dst = dir.path().join("a/b/c/dest.txt");
+        std::fs::write(&src, b"nested").unwrap();
+
+        copy_file(&src, &dst).unwrap();
+        assert_eq!(std::fs::read_to_string(&dst).unwrap(), "nested");
+    }
+
+    #[test]
+    fn test_copy_file_source_not_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("nonexistent.txt");
+        let dst = dir.path().join("dest.txt");
+
+        let result = copy_file(&src, &dst);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+    }
+}

@@ -80,6 +80,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "bios-limine-iso"
+version = "0.1.0"
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -152,19 +156,21 @@ dependencies = [
 
 [[package]]
 name = "cargo-image-runner"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cargo_metadata",
  "clap",
  "fatfs",
  "fscommon",
  "git2",
+ "hadris-fat",
  "hadris-iso",
  "indicatif",
  "ovmf-prebuilt",
  "serde",
  "serde_json",
  "serde_plain",
+ "tempfile",
  "thiserror 2.0.18",
  "toml",
 ]
@@ -374,6 +380,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastrand"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
 name = "fatfs"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -481,22 +493,38 @@ dependencies = [
 
 [[package]]
 name = "hadris-common"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aa8b06c2cb5ad55d91ec48aaaae64ecf9fead7730c7f720315fa5ff7897e3cc"
+checksum = "434a6c3ff929aa5bc606a9ece778fcd649612e8d548fabf8bdbc5b8e8ec66c52"
 dependencies = [
  "bytemuck",
  "chrono",
  "crc",
+ "hadris-io",
  "noalloc",
  "rand",
 ]
 
 [[package]]
-name = "hadris-io"
-version = "0.2.0"
+name = "hadris-fat"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a34dd29277f5293018a252dea8c2f847a7ca61b7b84419cdaef3c6be6f48b9ae"
+checksum = "186f2512bad3c904c05dc9358b33c6448873d33b31056f19a4f50bbe4aa4e229"
+dependencies = [
+ "bitflags 2.9.0",
+ "bytemuck",
+ "chrono",
+ "hadris-common",
+ "hadris-io",
+ "spin",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "hadris-io"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e39f078c9c91e9bc4e5cd272a36094a7b8d43c9698e91d13fc1a3a31e8a5a43"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -504,9 +532,9 @@ dependencies = [
 
 [[package]]
 name = "hadris-iso"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b47f4f68b73aa4018115ffbdc613b0b8ec33a32fd3f04e70503a7aafadf6db01"
+checksum = "b897a847cacb7232eac70c49538d906503ec9c3c17c2e3c555b7630b974adb80"
 dependencies = [
  "bitflags 2.9.0",
  "bytemuck",
@@ -521,9 +549,9 @@ dependencies = [
 
 [[package]]
 name = "hadris-part"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "822aee593c418e267077d087e437c922fc061d8fea92cb05526d563920e80053"
+checksum = "82f6391e89e246d15e20234e1f83da84557ea22216e27338d9d879c37007405b"
 dependencies = [
  "bytemuck",
  "hadris-io",
@@ -795,6 +823,18 @@ dependencies = [
  "pkg-config",
  "vcpkg",
 ]
+
+[[package]]
+name = "limine-directory"
+version = "0.1.0"
+
+[[package]]
+name = "limine-fat"
+version = "0.1.0"
+
+[[package]]
+name = "limine-iso"
+version = "0.1.0"
 
 [[package]]
 name = "linux-raw-sys"
@@ -1245,6 +1285,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempfile"
+version = "3.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0136791f7c95b1f6dd99f9cc786b91bb81c3800b639b3478e561ddb7be95e5f1"
+dependencies = [
+ "fastrand",
+ "getrandom 0.3.4",
+ "once_cell",
+ "rustix",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1371,6 +1424,14 @@ name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
+
+[[package]]
+name = "uefi-fat"
+version = "0.1.0"
+
+[[package]]
+name = "uefi-simple"
+version = "0.1.0"
 
 [[package]]
 name = "unicode-ident"

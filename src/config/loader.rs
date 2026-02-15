@@ -144,7 +144,7 @@ impl ConfigLoader {
     }
 
     /// Merge two configurations, with `override_config` taking precedence.
-    fn merge_configs(mut base: Config, override_cfg: Config) -> Config {
+    pub(crate) fn merge_configs(mut base: Config, override_cfg: Config) -> Config {
         // For now, we do a simple override strategy
         // In Phase 5, we'll implement more sophisticated merging
         // that handles individual fields properly
@@ -170,5 +170,114 @@ impl ConfigLoader {
 impl Default for ConfigLoader {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{BootType, BootloaderKind, ImageFormat};
+
+    #[test]
+    fn test_load_standalone_toml_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("image-runner.toml");
+        std::fs::write(
+            &config_path,
+            r#"
+[boot]
+type = "hybrid"
+
+[bootloader]
+kind = "limine"
+config-file = "limine.conf"
+
+[image]
+format = "iso"
+
+[variables]
+TIMEOUT = "5"
+"#,
+        )
+        .unwrap();
+
+        let loader = ConfigLoader::new()
+            .no_cargo_metadata()
+            .workspace_root(dir.path())
+            .config_file(&config_path);
+        let (config, root) = loader.load().unwrap();
+
+        assert_eq!(config.boot.boot_type, BootType::Hybrid);
+        assert_eq!(config.bootloader.kind, BootloaderKind::Limine);
+        assert_eq!(config.image.format, ImageFormat::Iso);
+        assert_eq!(config.variables.get("TIMEOUT").unwrap(), "5");
+        assert_eq!(root, dir.path());
+    }
+
+    #[test]
+    fn test_merge_configs_override_behavior() {
+        let base = Config::default();
+        let mut override_cfg = Config::default();
+        override_cfg.boot.boot_type = BootType::Hybrid;
+        override_cfg.bootloader.kind = BootloaderKind::Limine;
+        override_cfg.image.format = ImageFormat::Iso;
+
+        let merged = ConfigLoader::merge_configs(base, override_cfg);
+        assert_eq!(merged.boot.boot_type, BootType::Hybrid);
+        assert_eq!(merged.bootloader.kind, BootloaderKind::Limine);
+        assert_eq!(merged.image.format, ImageFormat::Iso);
+    }
+
+    #[test]
+    fn test_merge_configs_variable_merging() {
+        let mut base = Config::default();
+        base.variables
+            .insert("A".to_string(), "base_a".to_string());
+        base.variables
+            .insert("B".to_string(), "base_b".to_string());
+
+        let mut override_cfg = Config::default();
+        override_cfg
+            .variables
+            .insert("B".to_string(), "override_b".to_string());
+        override_cfg
+            .variables
+            .insert("C".to_string(), "override_c".to_string());
+
+        let merged = ConfigLoader::merge_configs(base, override_cfg);
+        assert_eq!(merged.variables.get("A").unwrap(), "base_a");
+        assert_eq!(merged.variables.get("B").unwrap(), "override_b");
+        assert_eq!(merged.variables.get("C").unwrap(), "override_c");
+    }
+
+    #[test]
+    fn test_missing_config_file_error() {
+        let loader = ConfigLoader::new()
+            .no_cargo_metadata()
+            .workspace_root("/tmp")
+            .config_file("/nonexistent/config.toml");
+        let result = loader.load();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_toml_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("bad.toml");
+        std::fs::write(&config_path, "this is not valid { toml [[[").unwrap();
+
+        let loader = ConfigLoader::new()
+            .no_cargo_metadata()
+            .workspace_root(dir.path())
+            .config_file(&config_path);
+        let result = loader.load();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_no_cargo_metadata_requires_workspace_root() {
+        let loader = ConfigLoader::new().no_cargo_metadata();
+        let result = loader.load();
+        assert!(result.is_err());
     }
 }

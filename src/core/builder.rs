@@ -401,3 +401,69 @@ fn create_runner_from_config(config: &Config) -> Result<Box<dyn Runner>> {
         RunnerKind::Qemu => Err(Error::feature_not_enabled("qemu")),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builder_error_missing_config() {
+        let result = ImageRunnerBuilder::new()
+            .workspace_root("/tmp")
+            .executable("/tmp/kernel")
+            .build();
+        let err = result.err().expect("should fail");
+        assert!(err.to_string().contains("no configuration"));
+    }
+
+    #[test]
+    fn test_builder_error_missing_workspace_root() {
+        let result = ImageRunnerBuilder::new()
+            .with_config(Config::default())
+            .executable("/tmp/kernel")
+            .build();
+        let err = result.err().expect("should fail");
+        assert!(err.to_string().contains("workspace root"));
+    }
+
+    #[test]
+    fn test_builder_error_missing_executable() {
+        let result = ImageRunnerBuilder::new()
+            .with_config(Config::default())
+            .workspace_root("/tmp")
+            .build();
+        let err = result.err().expect("should fail");
+        assert!(err.to_string().contains("executable"));
+    }
+
+    #[test]
+    fn test_builder_with_none_bootloader_and_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("kernel");
+        std::fs::write(&exe, b"fake").unwrap();
+
+        // Config defaults: BootloaderKind::None, ImageFormat::Directory
+        let result = ImageRunnerBuilder::new()
+            .with_config(Config::default())
+            .workspace_root(dir.path())
+            .executable(&exe)
+            .build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_builder_explicit_components() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("kernel");
+        std::fs::write(&exe, b"fake").unwrap();
+
+        let result = ImageRunnerBuilder::new()
+            .with_config(Config::default())
+            .workspace_root(dir.path())
+            .executable(&exe)
+            .no_bootloader()
+            .directory_output()
+            .build();
+        assert!(result.is_ok());
+    }
+}

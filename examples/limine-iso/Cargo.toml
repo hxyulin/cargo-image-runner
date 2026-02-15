@@ -1,0 +1,20 @@
+[package]
+name = "limine-iso"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[package.metadata.image-runner.boot]
+type = "hybrid"
+
+[package.metadata.image-runner.bootloader]
+kind = "limine"
+config-file = "limine.conf"
+
+[package.metadata.image-runner.image]
+format = "iso"
+
+[package.metadata.image-runner.variables]
+TIMEOUT = "5"
+
+[dependencies]
