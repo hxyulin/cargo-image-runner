@@ -1,0 +1,52 @@
+[package]
+name = "cargo-image-runner"
+version = "0.2.0"
+edition = "2024"
+license = "MIT"
+description = "A generic, customizable runner for building and booting kernel/embedded images with Limine, GRUB, QEMU, and more"
+repository = "https://github.com/hxyulin/cargo-image-runner"
+rust-version = "1.85"
+readme = "README.md"
+documentation = "https://docs.rs/cargo-image-runner"
+keywords = ["kernel", "bootloader", "qemu", "limine", "osdev"]
+categories = ["development-tools", "os", "command-line-utilities"]
+exclude = ["test-limine/", ".github/", "CLAUDE.md"]
+
+[features]
+default = ["uefi", "bios", "limine", "iso", "qemu"]
+
+# Boot types
+bios = []
+uefi = ["dep:ovmf-prebuilt"]
+
+# Bootloaders
+limine = ["dep:git2"]
+grub = []
+
+# Image formats
+iso = ["dep:hadris-iso"]
+fat = ["dep:fatfs", "dep:fscommon"]
+
+# Runners
+qemu = []
+
+# Optional
+progress = ["dep:indicatif"]
+
+[dependencies]
+# Core dependencies
+cargo_metadata = "0.18.1"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
+serde_plain = "1.0.2"
+clap = { version = "4.5.51", features = ["derive"] }
+thiserror = "2.0"
+toml = "0.8"
+
+# Optional dependencies
+git2 = { version = "0.20", optional = true }
+hadris-iso = { version = "0.2.0", optional = true }
+fatfs = { version = "0.3", optional = true, features = ["std"] }
+fscommon = { version = "0.1", optional = true }
+ovmf-prebuilt = { version = "0.2.2", optional = true }
+indicatif = { version = "0.17", optional = true }

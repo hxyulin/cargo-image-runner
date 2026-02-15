@@ -1,0 +1,22 @@
+[package]
+name = "test-limine"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata.image-runner.boot]
+type = "hybrid"  # Test both BIOS and UEFI
+
+[package.metadata.image-runner.bootloader]
+kind = "limine"
+config-file = "limine.conf"
+
+[package.metadata.image-runner.bootloader.limine]
+version = "v8.4.0-binary"
+
+[package.metadata.image-runner.image]
+format = "directory"
+
+[package.metadata.image-runner.variables]
+TIMEOUT = "5"
+
+[dependencies]
