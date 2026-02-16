@@ -9,6 +9,8 @@ use std::path::PathBuf;
 #[cfg(feature = "iso")]
 use hadris_iso::boot::options::BootOptions;
 #[cfg(feature = "iso")]
+use hadris_iso::write::options::HybridBootOptions;
+#[cfg(feature = "iso")]
 use hadris_iso::write::InputFiles;
 
 /// ISO image builder using hadris-iso.
@@ -80,7 +82,11 @@ impl IsoImageBuilder {
             joliet: Some(JolietLevel::Level3), // Unicode filename support
             rock_ridge: Some(RripOptions::default()), // Preserve original case filenames
             el_torito: boot_options,
-            hybrid_boot: None, // TODO: Configure hybrid boot options if needed
+            hybrid_boot: Some(match ctx.config.boot.boot_type {
+                BootType::Bios => HybridBootOptions::mbr(),
+                BootType::Uefi => HybridBootOptions::gpt(),
+                BootType::Hybrid => HybridBootOptions::hybrid(),
+            }),
         };
 
         // Configure format options

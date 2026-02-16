@@ -114,7 +114,9 @@ impl Runner for QemuRunner {
         cmd.stderr(Stdio::inherit());
 
         // Run QEMU
-        println!("Executing: {:?}", cmd);
+        if ctx.config.verbose {
+            println!("Executing: {:?}", cmd);
+        }
         let status = cmd.status().map_err(|e| {
             Error::runner(format!(
                 "failed to execute {}: {}",

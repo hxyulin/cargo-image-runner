@@ -218,7 +218,9 @@ impl ImageRunner {
         self.image_builder.validate_boot_type(&ctx)?;
 
         // Prepare bootloader files
-        println!("Preparing bootloader: {}", self.bootloader.name());
+        if ctx.config.verbose {
+            println!("Preparing bootloader: {}", self.bootloader.name());
+        }
         let bootloader_files = self.bootloader.prepare(&ctx)?;
 
         // Get config files and process templates
@@ -261,7 +263,9 @@ impl ImageRunner {
         }
 
         // Build image
-        println!("Building image: {}", self.image_builder.name());
+        if ctx.config.verbose {
+            println!("Building image: {}", self.image_builder.name());
+        }
         let image_path = self.image_builder.build(&ctx, &all_files)?;
 
         Ok(image_path)
@@ -278,7 +282,9 @@ impl ImageRunner {
         self.runner.validate(&ctx)?;
 
         // Prepare bootloader files
-        println!("Preparing bootloader: {}", self.bootloader.name());
+        if ctx.config.verbose {
+            println!("Preparing bootloader: {}", self.bootloader.name());
+        }
         let bootloader_files = self.bootloader.prepare(&ctx)?;
 
         // Get config files and process templates
@@ -321,11 +327,15 @@ impl ImageRunner {
         }
 
         // Build image
-        println!("Building image: {}", self.image_builder.name());
+        if ctx.config.verbose {
+            println!("Building image: {}", self.image_builder.name());
+        }
         let image_path = self.image_builder.build(&ctx, &all_files)?;
 
         // Run image
-        println!("Running with: {}", self.runner.name());
+        if ctx.config.verbose {
+            println!("Running with: {}", self.runner.name());
+        }
         let result = self.runner.run(&ctx, &image_path)?;
 
         // Check result
@@ -333,7 +343,9 @@ impl ImageRunner {
             // For tests, check if we have a specific success exit code
             if let Some(success_code) = ctx.test_success_exit_code() {
                 if result.exit_code == success_code {
-                    println!("Test passed (exit code: {})", result.exit_code);
+                    if ctx.config.verbose {
+                        println!("Test passed (exit code: {})", result.exit_code);
+                    }
                     return Ok(());
                 } else {
                     return Err(Error::runner(format!(

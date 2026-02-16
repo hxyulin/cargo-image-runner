@@ -37,6 +37,10 @@ pub struct Config {
     /// Template variables for substitution.
     #[serde(default)]
     pub variables: HashMap<String, String>,
+
+    /// Enable verbose output (show build progress messages).
+    #[serde(default)]
+    pub verbose: bool,
 }
 
 /// Boot type configuration.
@@ -309,6 +313,7 @@ mod tests {
         assert!(!config.run.gui);
         assert!(config.run.extra_args.is_empty());
         assert!(config.variables.is_empty());
+        assert!(!config.verbose);
     }
 
     #[test]
@@ -326,6 +331,8 @@ mod tests {
     #[test]
     fn test_config_deserialize_full() {
         let toml_str = r#"
+        verbose = true
+
         [boot]
         type = "hybrid"
 
@@ -381,6 +388,7 @@ mod tests {
         assert_eq!(config.test.timeout, Some(30));
         assert!(config.run.gui);
         assert_eq!(config.variables.get("TIMEOUT").unwrap(), "5");
+        assert!(config.verbose);
     }
 
     #[test]

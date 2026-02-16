@@ -4,12 +4,12 @@ default-members = ["."]
 
 [package]
 name = "cargo-image-runner"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 license = "MIT"
 description = "A generic, customizable runner for building and booting kernel/embedded images with Limine, GRUB, QEMU, and more"
 repository = "https://github.com/hxyulin/cargo-image-runner"
-rust-version = "1.85"
+rust-version = "1.87"
 readme = "README.md"
 documentation = "https://docs.rs/cargo-image-runner"
 keywords = ["kernel", "bootloader", "qemu", "limine", "osdev"]

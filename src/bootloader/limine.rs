@@ -43,7 +43,7 @@ impl LimineBootloader {
         let version = self.get_version(ctx);
         let cache_dir = ctx.cache_dir.join("bootloaders");
 
-        let fetcher = GitFetcher::new(cache_dir);
+        let fetcher = GitFetcher::new(cache_dir, ctx.config.verbose);
         fetcher.fetch_ref(&self.repo_url, "limine", version)
     }
 

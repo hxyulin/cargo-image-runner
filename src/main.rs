@@ -99,21 +99,31 @@ fn build_image(executable: PathBuf) -> cargo_image_runner::Result<()> {
     // Load configuration
     let (config, _workspace_root) = cargo_image_runner::config::ConfigLoader::new().load()?;
 
-    println!("Building image for: {}", executable.display());
-    println!("Boot type: {:?}", config.boot.boot_type);
-    println!("Bootloader: {:?}", config.bootloader.kind);
-    println!("Image format: {:?}", config.image.format);
+    let verbose = config.verbose;
+
+    if verbose {
+        println!("Building image for: {}", executable.display());
+        println!("Boot type: {:?}", config.boot.boot_type);
+        println!("Bootloader: {:?}", config.bootloader.kind);
+        println!("Image format: {:?}", config.image.format);
+    }
 
     // Build the image using the builder
-    println!("\n--- Building image runner ---");
+    if verbose {
+        println!("\n--- Building image runner ---");
+    }
     let runner = builder()
         .from_cargo_metadata()?
         .executable(executable)
         .build()?;
 
-    println!("--- Executing build ---");
+    if verbose {
+        println!("--- Executing build ---");
+    }
     let image_path = runner.build_image()?;
-    println!("\n✓ Image built successfully at: {}", image_path.display());
+    if verbose {
+        println!("\n✓ Image built successfully at: {}", image_path.display());
+    }
 
     Ok(())
 }
@@ -122,14 +132,18 @@ fn clean_artifacts() -> cargo_image_runner::Result<()> {
     use cargo_image_runner::config::ConfigLoader;
 
     // Load configuration to find the target directory
-    let (_, workspace_root) = ConfigLoader::new().load()?;
+    let (config, workspace_root) = ConfigLoader::new().load()?;
     let target_dir = workspace_root.join("target").join("image-runner");
 
     if target_dir.exists() {
-        println!("Cleaning artifacts in: {}", target_dir.display());
+        if config.verbose {
+            println!("Cleaning artifacts in: {}", target_dir.display());
+        }
         std::fs::remove_dir_all(&target_dir)?;
-        println!("Cleaned successfully");
-    } else {
+        if config.verbose {
+            println!("Cleaned successfully");
+        }
+    } else if config.verbose {
         println!("No artifacts to clean");
     }
 

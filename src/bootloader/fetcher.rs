@@ -5,13 +5,14 @@ use std::path::{Path, PathBuf};
 #[cfg(feature = "limine")]
 pub struct GitFetcher {
     cache_dir: PathBuf,
+    verbose: bool,
 }
 
 #[cfg(feature = "limine")]
 impl GitFetcher {
     /// Create a new git fetcher with the specified cache directory.
-    pub fn new(cache_dir: PathBuf) -> Self {
-        Self { cache_dir }
+    pub fn new(cache_dir: PathBuf, verbose: bool) -> Self {
+        Self { cache_dir, verbose }
     }
 
     /// Fetch a git repository to the cache directory.
@@ -23,11 +24,15 @@ impl GitFetcher {
 
         // If directory exists, assume it's already fetched
         if repo_path.exists() {
-            println!("Using cached {} from {}", name, repo_path.display());
+            if self.verbose {
+                println!("Using cached {} from {}", name, repo_path.display());
+            }
             return Ok(repo_path);
         }
 
-        println!("Fetching {} from {}...", name, url);
+        if self.verbose {
+            println!("Fetching {} from {}...", name, url);
+        }
         std::fs::create_dir_all(&self.cache_dir)?;
 
         // Clone the repository
@@ -38,7 +43,9 @@ impl GitFetcher {
             .clone(url, &repo_path)
             .map_err(|e| Error::bootloader(format!("failed to clone {}: {}", url, e)))?;
 
-        println!("Fetched {} successfully", name);
+        if self.verbose {
+            println!("Fetched {} successfully", name);
+        }
         Ok(repo_path)
     }
 
@@ -48,11 +55,15 @@ impl GitFetcher {
 
         // If directory exists, assume it's already fetched
         if repo_path.exists() {
-            println!("Using cached {} ({}) from {}", name, git_ref, repo_path.display());
+            if self.verbose {
+                println!("Using cached {} ({}) from {}", name, git_ref, repo_path.display());
+            }
             return Ok(repo_path);
         }
 
-        println!("Fetching {} ({}) from {}...", name, git_ref, url);
+        if self.verbose {
+            println!("Fetching {} ({}) from {}...", name, git_ref, url);
+        }
         std::fs::create_dir_all(&self.cache_dir)?;
 
         // Clone the repository
@@ -72,7 +83,9 @@ impl GitFetcher {
         }
         .map_err(|e| Error::bootloader(format!("failed to set HEAD: {}", e)))?;
 
-        println!("Fetched {} ({}) successfully", name, git_ref);
+        if self.verbose {
+            println!("Fetched {} ({}) successfully", name, git_ref);
+        }
         Ok(repo_path)
     }
 
@@ -110,7 +123,7 @@ pub struct GitFetcher;
 
 #[cfg(not(feature = "limine"))]
 impl GitFetcher {
-    pub fn new(_cache_dir: PathBuf) -> Self {
+    pub fn new(_cache_dir: PathBuf, _verbose: bool) -> Self {
         Self
     }
 
