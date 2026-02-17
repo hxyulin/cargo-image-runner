@@ -116,6 +116,8 @@ pub mod bootloader;
 pub mod config;
 pub mod core;
 pub mod firmware;
+#[cfg(feature = "test-harness")]
+pub mod harness;
 pub mod image;
 pub mod runner;
 pub mod util;

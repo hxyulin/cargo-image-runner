@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub mod env;
 mod loader;
 pub use loader::ConfigLoader;
 
@@ -278,6 +279,57 @@ pub struct TestConfig {
 
     /// Timeout for tests in seconds.
     pub timeout: Option<u64>,
+
+    /// Test harness configuration for parsing sub-test results.
+    #[serde(default)]
+    pub harness: HarnessConfig,
+}
+
+/// Test harness configuration for parsing sub-test results from serial output.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarnessConfig {
+    /// When to show captured output: "always", "never", "on-failure".
+    #[serde(default)]
+    pub show_output: ShowOutput,
+
+    /// Regex for matching passed tests (capture group 1 = test name).
+    #[serde(default = "default_pass_pattern", rename = "pass-pattern")]
+    pub pass_pattern: String,
+
+    /// Regex for matching failed tests (capture group 1 = test name).
+    #[serde(default = "default_fail_pattern", rename = "fail-pattern")]
+    pub fail_pattern: String,
+}
+
+impl Default for HarnessConfig {
+    fn default() -> Self {
+        Self {
+            show_output: ShowOutput::default(),
+            pass_pattern: default_pass_pattern(),
+            fail_pattern: default_fail_pattern(),
+        }
+    }
+}
+
+fn default_pass_pattern() -> String {
+    r"\[(?:PASS|OK|PASSED)\]\s+(.*)".to_string()
+}
+
+fn default_fail_pattern() -> String {
+    r"\[(?:FAIL|FAILED|ERROR)\]\s+(.*)".to_string()
+}
+
+/// Controls when captured output is displayed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ShowOutput {
+    /// Always show captured output.
+    Always,
+    /// Never show captured output.
+    Never,
+    /// Show captured output only when tests fail.
+    #[default]
+    OnFailure,
 }
 
 /// Run-specific configuration (non-test).

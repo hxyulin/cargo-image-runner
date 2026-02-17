@@ -58,8 +58,8 @@ fn run() -> cargo_image_runner::Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Some(Command::Run { executable, qemu_args: _ }) => {
-            run_executable(executable)?;
+        Some(Command::Run { executable, qemu_args }) => {
+            run_executable(executable, qemu_args)?;
         }
         Some(Command::Build { executable }) => {
             build_image(executable)?;
@@ -76,7 +76,7 @@ fn run() -> cargo_image_runner::Result<()> {
         None => {
             // Default behavior: run the executable
             if let Some(executable) = args.executable {
-                run_executable(executable)?;
+                run_executable(executable, args.qemu_args)?;
             } else {
                 eprintln!("Error: No executable specified");
                 eprintln!("Usage: cargo-image-runner <EXECUTABLE>");
@@ -88,10 +88,11 @@ fn run() -> cargo_image_runner::Result<()> {
     Ok(())
 }
 
-fn run_executable(executable: PathBuf) -> cargo_image_runner::Result<()> {
+fn run_executable(executable: PathBuf, qemu_args: Vec<String>) -> cargo_image_runner::Result<()> {
     builder()
         .from_cargo_metadata()?
         .executable(executable)
+        .extra_args(qemu_args)
         .run()
 }
 
@@ -152,10 +153,11 @@ fn clean_artifacts() -> cargo_image_runner::Result<()> {
 
 fn check_config() -> cargo_image_runner::Result<()> {
     use cargo_image_runner::config::ConfigLoader;
+    use cargo_image_runner::config::env;
 
     println!("Checking configuration...");
 
-    // Load configuration
+    // Load configuration (includes profile + env overrides)
     let (config, workspace_root) = ConfigLoader::new().load()?;
 
     println!("Workspace root: {}", workspace_root.display());
@@ -163,6 +165,30 @@ fn check_config() -> cargo_image_runner::Result<()> {
     println!("Bootloader: {:?}", config.bootloader.kind);
     println!("Image format: {:?}", config.image.format);
     println!("Runner: {:?}", config.runner.kind);
+    println!("Verbose: {}", config.verbose);
+
+    // Show active profile
+    if let Some(profile) = env::get_profile_name() {
+        println!("\nActive profile: {}", profile);
+    }
+
+    // Show env var overrides
+    let overrides = env::detect_active_overrides();
+    if !overrides.is_empty() {
+        println!("\nEnvironment variable overrides:");
+        for (key, value) in &overrides {
+            println!("  {} = {}", key, value);
+        }
+    }
+
+    // Show env var template variables
+    let env_vars = env::collect_env_variables();
+    if !env_vars.is_empty() {
+        println!("\nTemplate variables from environment:");
+        for (key, value) in &env_vars {
+            println!("  {} = {}", key, value);
+        }
+    }
 
     // Check QEMU availability
     #[cfg(feature = "qemu")]
@@ -174,9 +200,17 @@ fn check_config() -> cargo_image_runner::Result<()> {
             .is_ok();
 
         if qemu_available {
-            println!("✓ QEMU available: {}", config.runner.qemu.binary);
+            println!("QEMU available: {}", config.runner.qemu.binary);
         } else {
-            println!("✗ QEMU not found: {}", config.runner.qemu.binary);
+            println!("QEMU not found: {}", config.runner.qemu.binary);
+        }
+
+        println!("  Memory: {} MB", config.runner.qemu.memory);
+        println!("  Cores: {}", config.runner.qemu.cores);
+        println!("  Machine: {}", config.runner.qemu.machine);
+        println!("  KVM: {}", config.runner.qemu.kvm);
+        if !config.runner.qemu.extra_args.is_empty() {
+            println!("  Extra args: {:?}", config.runner.qemu.extra_args);
         }
     }
 
@@ -190,9 +224,9 @@ fn check_config() -> cargo_image_runner::Result<()> {
         };
 
         if limine_conf.exists() {
-            println!("✓ Limine config found: {}", limine_conf.display());
+            println!("Limine config found: {}", limine_conf.display());
         } else {
-            println!("✗ Limine config not found: {}", limine_conf.display());
+            println!("Limine config not found: {}", limine_conf.display());
         }
     }
 

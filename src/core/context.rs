@@ -28,6 +28,12 @@ pub struct Context {
 
     /// Template variables available for substitution.
     pub template_vars: HashMap<String, String>,
+
+    /// Extra QEMU arguments from CLI passthrough (`-- args`).
+    pub cli_extra_args: Vec<String>,
+
+    /// Extra QEMU arguments from `CARGO_IMAGE_RUNNER_QEMU_ARGS` env var.
+    pub env_extra_args: Vec<String>,
 }
 
 impl Context {
@@ -50,6 +56,8 @@ impl Context {
             cache_dir,
             output_dir,
             template_vars: HashMap::new(),
+            cli_extra_args: Vec::new(),
+            env_extra_args: Vec::new(),
         };
 
         // Detect if this is a test run
@@ -82,11 +90,21 @@ impl Context {
     }
 
     /// Initialize template variables.
+    ///
+    /// Layering order:
+    /// 1. Config variables (`[variables]`)
+    /// 2. Env var variables (`CARGO_IMAGE_RUNNER_VAR_*`)
+    /// 3. Built-in variables (always win)
     fn init_template_vars(&mut self) {
-        // Start with user-defined variables from config
+        // 1. Start with user-defined variables from config
         self.template_vars = self.config.variables.clone();
 
-        // Add built-in variables
+        // 2. Overlay env var variables (override config vars)
+        for (key, value) in crate::config::env::collect_env_variables() {
+            self.template_vars.insert(key, value);
+        }
+
+        // 3. Built-in variables (always override everything)
         self.template_vars.insert(
             "EXECUTABLE".to_string(),
             self.executable.display().to_string(),
@@ -270,5 +288,61 @@ mod tests {
         let ctx =
             Context::new(config, dir.path().to_path_buf(), exe).unwrap();
         assert_eq!(ctx.test_success_exit_code(), Some(33));
+    }
+
+    #[test]
+    fn test_env_variables_override_config() {
+        use std::sync::Mutex;
+        static LOCK: Mutex<()> = Mutex::new(());
+        let _guard = LOCK.lock().unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("my-kernel");
+        std::fs::write(&exe, b"fake").unwrap();
+
+        let mut config = Config::default();
+        config.variables.insert("MYVAR".to_string(), "from_config".to_string());
+
+        // Set env var that should override
+        let env_key = "CARGO_IMAGE_RUNNER_VAR_MYVAR";
+        let old = std::env::var(env_key).ok();
+        // SAFETY: test is serialized via LOCK
+        unsafe { std::env::set_var(env_key, "from_env") };
+
+        let ctx = Context::new(config, dir.path().to_path_buf(), exe).unwrap();
+        assert_eq!(ctx.template_vars.get("MYVAR").unwrap(), "from_env");
+
+        // SAFETY: test is serialized via LOCK
+        match old {
+            Some(v) => unsafe { std::env::set_var(env_key, v) },
+            None => unsafe { std::env::remove_var(env_key) },
+        }
+    }
+
+    #[test]
+    fn test_builtin_vars_override_env_vars() {
+        use std::sync::Mutex;
+        static LOCK: Mutex<()> = Mutex::new(());
+        let _guard = LOCK.lock().unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("my-kernel");
+        std::fs::write(&exe, b"fake").unwrap();
+
+        // Try to override a built-in var via env — it should NOT succeed
+        let env_key = "CARGO_IMAGE_RUNNER_VAR_EXECUTABLE_NAME";
+        let old = std::env::var(env_key).ok();
+        // SAFETY: test is serialized via LOCK
+        unsafe { std::env::set_var(env_key, "should_not_win") };
+
+        let ctx = Context::new(Config::default(), dir.path().to_path_buf(), exe).unwrap();
+        // Built-in EXECUTABLE_NAME should win
+        assert_eq!(ctx.template_vars.get("EXECUTABLE_NAME").unwrap(), "my-kernel");
+
+        // SAFETY: test is serialized via LOCK
+        match old {
+            Some(v) => unsafe { std::env::set_var(env_key, v) },
+            None => unsafe { std::env::remove_var(env_key) },
+        }
     }
 }

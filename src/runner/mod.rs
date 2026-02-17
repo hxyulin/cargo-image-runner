@@ -43,12 +43,30 @@ pub struct RunResult {
 
     /// Whether the run was considered successful.
     pub success: bool,
+
+    /// Captured stdout/stderr output (populated in test mode).
+    pub captured_output: Option<CapturedOutput>,
+
+    /// Whether the run was terminated due to a timeout.
+    pub timed_out: bool,
+}
+
+/// Captured stdout and stderr from a runner execution.
+#[derive(Debug, Clone)]
+pub struct CapturedOutput {
+    pub stdout: String,
+    pub stderr: String,
 }
 
 impl RunResult {
     /// Create a new run result.
     pub fn new(exit_code: i32, success: bool) -> Self {
-        Self { exit_code, success }
+        Self {
+            exit_code,
+            success,
+            captured_output: None,
+            timed_out: false,
+        }
     }
 
     /// Create a successful result with exit code 0.
@@ -56,6 +74,8 @@ impl RunResult {
         Self {
             exit_code: 0,
             success: true,
+            captured_output: None,
+            timed_out: false,
         }
     }
 
@@ -64,7 +84,21 @@ impl RunResult {
         Self {
             exit_code,
             success: false,
+            captured_output: None,
+            timed_out: false,
         }
+    }
+
+    /// Attach captured output to the result.
+    pub fn with_output(mut self, stdout: String, stderr: String) -> Self {
+        self.captured_output = Some(CapturedOutput { stdout, stderr });
+        self
+    }
+
+    /// Mark the result as timed out.
+    pub fn with_timeout(mut self) -> Self {
+        self.timed_out = true;
+        self
     }
 }
 

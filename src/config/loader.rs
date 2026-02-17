@@ -1,6 +1,7 @@
 use super::Config;
 use crate::core::error::{Error, Result};
 use cargo_metadata::MetadataCommand;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Configuration loader that supports multiple sources.
@@ -45,17 +46,21 @@ impl ConfigLoader {
     ///
     /// Priority (later sources override earlier):
     /// 1. Default values
-    /// 2. Cargo.toml metadata
+    /// 2. Cargo.toml metadata (workspace then package)
     /// 3. Standalone TOML file
+    /// 4. Profile overlay (`CARGO_IMAGE_RUNNER_PROFILE`)
+    /// 5. Individual env var overrides (`CARGO_IMAGE_RUNNER_*`)
     pub fn load(self) -> Result<(Config, PathBuf)> {
         let mut config = Config::default();
         let workspace_root;
+        let mut profiles: HashMap<String, serde_json::Value> = HashMap::new();
 
         // Load from Cargo metadata if enabled
         if self.use_cargo_metadata {
-            let (root, cargo_config) = self.load_cargo_metadata()?;
+            let (root, cargo_config, cargo_profiles) = self.load_cargo_metadata()?;
             workspace_root = root;
             config = Self::merge_configs(config, cargo_config);
+            profiles = cargo_profiles;
         } else {
             workspace_root = self
                 .workspace_root
@@ -69,13 +74,46 @@ impl ConfigLoader {
             config = Self::merge_configs(config, file_config);
         }
 
+        // Apply profile overlay if CARGO_IMAGE_RUNNER_PROFILE is set
+        if let Some(profile_name) = super::env::get_profile_name() {
+            let profile_value = profiles.get(&profile_name).ok_or_else(|| {
+                let available: Vec<&String> = profiles.keys().collect();
+                if available.is_empty() {
+                    Error::config(format!(
+                        "profile '{}' not found (no profiles defined)",
+                        profile_name,
+                    ))
+                } else {
+                    Error::config(format!(
+                        "profile '{}' not found. Available profiles: {}",
+                        profile_name,
+                        available.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+                    ))
+                }
+            })?;
+
+            let mut base_value = serde_json::to_value(&config)
+                .map_err(|e| Error::config(format!("failed to serialize config: {}", e)))?;
+            deep_merge(&mut base_value, profile_value);
+            config = serde_json::from_value(base_value)
+                .map_err(|e| Error::config(format!("failed to apply profile '{}': {}", profile_name, e)))?;
+        }
+
+        // Apply individual env var overrides (highest priority)
+        super::env::apply_env_overrides(&mut config);
+
         Ok((config, workspace_root))
     }
 
     /// Load configuration from Cargo.toml metadata.
     ///
+    /// Returns `(workspace_root, config, profiles)`.
     /// Priority: package metadata > workspace metadata > defaults.
-    fn load_cargo_metadata(&self) -> Result<(PathBuf, Config)> {
+    /// Profiles are collected from both workspace and package metadata
+    /// (package profiles override workspace profiles with the same name).
+    fn load_cargo_metadata(
+        &self,
+    ) -> Result<(PathBuf, Config, HashMap<String, serde_json::Value>)> {
         let manifest_path = std::env::var("CARGO_MANIFEST_PATH").ok();
 
         let mut cmd = MetadataCommand::new();
@@ -86,8 +124,13 @@ impl ConfigLoader {
         let metadata = cmd.exec()?;
         let workspace_root = metadata.workspace_root.clone().into_std_path_buf();
 
+        let mut profiles: HashMap<String, serde_json::Value> = HashMap::new();
+
         // Parse workspace metadata: [workspace.metadata.image-runner]
         let workspace_config = if let Some(ws_value) = metadata.workspace_metadata.get("image-runner") {
+            // Extract profiles before deserializing Config
+            extract_profiles(ws_value, &mut profiles);
+
             Some(
                 serde_json::from_value::<Config>(ws_value.clone())
                     .map_err(|e| Error::config(format!("invalid workspace metadata: {}", e)))?,
@@ -111,6 +154,9 @@ impl ConfigLoader {
         // Parse package metadata: [package.metadata.image-runner]
         let package_config = if let Some(package) = package {
             if let Some(metadata_value) = package.metadata.get("image-runner") {
+                // Package profiles override workspace profiles
+                extract_profiles(metadata_value, &mut profiles);
+
                 Some(
                     serde_json::from_value::<Config>(metadata_value.clone())
                         .map_err(|e| Error::config(format!("invalid Cargo.toml metadata: {}", e)))?,
@@ -131,7 +177,7 @@ impl ConfigLoader {
             config = Self::merge_configs(config, pkg_config);
         }
 
-        Ok((workspace_root, config))
+        Ok((workspace_root, config, profiles))
     }
 
     /// Load configuration from a standalone TOML file.
@@ -145,20 +191,15 @@ impl ConfigLoader {
 
     /// Merge two configurations, with `override_config` taking precedence.
     pub(crate) fn merge_configs(mut base: Config, override_cfg: Config) -> Config {
-        // For now, we do a simple override strategy
-        // In Phase 5, we'll implement more sophisticated merging
-        // that handles individual fields properly
-
-        // Simple merge: non-default values from override take precedence
-        // This is a placeholder - full implementation in Phase 5
         base.boot = override_cfg.boot;
         base.bootloader = override_cfg.bootloader;
         base.image = override_cfg.image;
         base.runner = override_cfg.runner;
         base.test = override_cfg.test;
         base.run = override_cfg.run;
+        base.verbose = override_cfg.verbose;
 
-        // Merge variables
+        // Merge variables (override wins per-key, base keys preserved)
         for (k, v) in override_cfg.variables {
             base.variables.insert(k, v);
         }
@@ -170,6 +211,41 @@ impl ConfigLoader {
 impl Default for ConfigLoader {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Extract profile definitions from a metadata JSON value.
+///
+/// Profiles live at `value["profiles"]` as `{ name: { ...config fields... } }`.
+/// Package-level profiles override workspace-level profiles with the same name.
+fn extract_profiles(
+    value: &serde_json::Value,
+    profiles: &mut HashMap<String, serde_json::Value>,
+) {
+    if let Some(serde_json::Value::Object(map)) = value.get("profiles") {
+        for (name, profile_value) in map {
+            profiles.insert(name.clone(), profile_value.clone());
+        }
+    }
+}
+
+/// Recursively deep-merge `overlay` into `base`.
+///
+/// - Objects: keys are merged recursively (overlay keys win for conflicts).
+/// - Scalars and arrays: overlay replaces base entirely.
+pub(crate) fn deep_merge(base: &mut serde_json::Value, overlay: &serde_json::Value) {
+    match (base, overlay) {
+        (serde_json::Value::Object(base_map), serde_json::Value::Object(overlay_map)) => {
+            for (key, overlay_val) in overlay_map {
+                let entry = base_map
+                    .entry(key.clone())
+                    .or_insert(serde_json::Value::Null);
+                deep_merge(entry, overlay_val);
+            }
+        }
+        (base, overlay) => {
+            *base = overlay.clone();
+        }
     }
 }
 
@@ -279,5 +355,94 @@ TIMEOUT = "5"
         let loader = ConfigLoader::new().no_cargo_metadata();
         let result = loader.load();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_deep_merge_objects() {
+        let mut base = serde_json::json!({
+            "boot": { "type": "uefi" },
+            "runner": { "qemu": { "memory": 1024, "cores": 1 } }
+        });
+        let overlay = serde_json::json!({
+            "runner": { "qemu": { "memory": 4096 } }
+        });
+        deep_merge(&mut base, &overlay);
+        // memory overridden, cores preserved, boot preserved
+        assert_eq!(base["runner"]["qemu"]["memory"], 4096);
+        assert_eq!(base["runner"]["qemu"]["cores"], 1);
+        assert_eq!(base["boot"]["type"], "uefi");
+    }
+
+    #[test]
+    fn test_deep_merge_array_replaces() {
+        let mut base = serde_json::json!({
+            "runner": { "qemu": { "extra_args": ["-serial", "stdio"] } }
+        });
+        let overlay = serde_json::json!({
+            "runner": { "qemu": { "extra_args": ["-s", "-S"] } }
+        });
+        deep_merge(&mut base, &overlay);
+        assert_eq!(
+            base["runner"]["qemu"]["extra_args"],
+            serde_json::json!(["-s", "-S"])
+        );
+    }
+
+    #[test]
+    fn test_deep_merge_scalar_replaces() {
+        let mut base = serde_json::json!({ "verbose": false });
+        let overlay = serde_json::json!({ "verbose": true });
+        deep_merge(&mut base, &overlay);
+        assert_eq!(base["verbose"], true);
+    }
+
+    #[test]
+    fn test_extract_profiles_from_json() {
+        let value = serde_json::json!({
+            "boot": { "type": "uefi" },
+            "profiles": {
+                "debug": {
+                    "verbose": true,
+                    "runner": { "qemu": { "memory": 4096 } }
+                },
+                "ci": {
+                    "runner": { "qemu": { "kvm": false } }
+                }
+            }
+        });
+        let mut profiles = HashMap::new();
+        extract_profiles(&value, &mut profiles);
+        assert_eq!(profiles.len(), 2);
+        assert!(profiles.contains_key("debug"));
+        assert!(profiles.contains_key("ci"));
+        assert_eq!(profiles["debug"]["verbose"], true);
+    }
+
+    #[test]
+    fn test_extract_profiles_none() {
+        let value = serde_json::json!({ "boot": { "type": "uefi" } });
+        let mut profiles = HashMap::new();
+        extract_profiles(&value, &mut profiles);
+        assert!(profiles.is_empty());
+    }
+
+    #[test]
+    fn test_profile_application_via_deep_merge() {
+        // Simulate what load() does: serialize config, merge profile, deserialize
+        let config = Config::default();
+        let mut base_value = serde_json::to_value(&config).unwrap();
+
+        let profile = serde_json::json!({
+            "verbose": true,
+            "runner": { "qemu": { "memory": 4096 } }
+        });
+        deep_merge(&mut base_value, &profile);
+
+        let result: Config = serde_json::from_value(base_value).unwrap();
+        assert!(result.verbose);
+        assert_eq!(result.runner.qemu.memory, 4096);
+        // Other defaults preserved
+        assert_eq!(result.runner.qemu.cores, 1);
+        assert_eq!(result.boot.boot_type, BootType::Uefi);
     }
 }

@@ -14,6 +14,7 @@ pub struct ImageRunnerBuilder {
     bootloader: Option<Box<dyn Bootloader>>,
     image_builder: Option<Box<dyn ImageBuilder>>,
     runner: Option<Box<dyn Runner>>,
+    cli_extra_args: Vec<String>,
 }
 
 impl ImageRunnerBuilder {
@@ -26,6 +27,7 @@ impl ImageRunnerBuilder {
             bootloader: None,
             image_builder: None,
             runner: None,
+            cli_extra_args: Vec::new(),
         }
     }
 
@@ -60,6 +62,12 @@ impl ImageRunnerBuilder {
     /// Set the workspace root.
     pub fn workspace_root(mut self, path: impl Into<PathBuf>) -> Self {
         self.workspace_root = Some(path.into());
+        self
+    }
+
+    /// Set extra QEMU arguments from CLI passthrough (`-- args`).
+    pub fn extra_args(mut self, args: Vec<String>) -> Self {
+        self.cli_extra_args = args;
         self
     }
 
@@ -175,6 +183,7 @@ impl ImageRunnerBuilder {
             bootloader,
             image_builder,
             runner,
+            cli_extra_args: self.cli_extra_args,
         })
     }
 
@@ -199,6 +208,7 @@ pub struct ImageRunner {
     bootloader: Box<dyn Bootloader>,
     image_builder: Box<dyn ImageBuilder>,
     runner: Box<dyn Runner>,
+    cli_extra_args: Vec<String>,
 }
 
 impl ImageRunner {
@@ -207,11 +217,13 @@ impl ImageRunner {
     /// Returns the path to the built image.
     pub fn build_image(&self) -> Result<PathBuf> {
         // Create context
-        let ctx = Context::new(
+        let mut ctx = Context::new(
             self.config.clone(),
             self.workspace_root.clone(),
             self.executable.clone(),
         )?;
+        ctx.cli_extra_args = self.cli_extra_args.clone();
+        ctx.env_extra_args = crate::config::env::get_extra_qemu_args();
 
         // Validate all components
         self.bootloader.validate_config(&ctx)?;
@@ -274,7 +286,9 @@ impl ImageRunner {
     /// Run the full pipeline: prepare bootloader, build image, execute.
     pub fn run(self) -> Result<()> {
         // Create context
-        let ctx = Context::new(self.config, self.workspace_root, self.executable)?;
+        let mut ctx = Context::new(self.config, self.workspace_root, self.executable)?;
+        ctx.cli_extra_args = self.cli_extra_args;
+        ctx.env_extra_args = crate::config::env::get_extra_qemu_args();
 
         // Validate all components
         self.bootloader.validate_config(&ctx)?;
@@ -340,18 +354,39 @@ impl ImageRunner {
 
         // Check result
         if ctx.is_test {
-            // For tests, check if we have a specific success exit code
-            if let Some(success_code) = ctx.test_success_exit_code() {
-                if result.exit_code == success_code {
-                    if ctx.config.verbose {
-                        println!("Test passed (exit code: {})", result.exit_code);
+            #[cfg(feature = "test-harness")]
+            {
+                let harness = crate::harness::TestHarness::new(&ctx.config.test.harness)?;
+                let test_output = harness.evaluate(&result);
+                harness.report(&test_output, result.captured_output.as_ref());
+
+                if !test_output.overall_success {
+                    if result.timed_out {
+                        return Err(Error::runner("test timed out"));
                     }
-                    return Ok(());
-                } else {
                     return Err(Error::runner(format!(
-                        "Test failed: expected exit code {}, got {}",
-                        success_code, result.exit_code
+                        "test result: {} passed, {} failed",
+                        test_output.passed, test_output.failed
                     )));
+                }
+                return Ok(());
+            }
+
+            // Fallback when test-harness feature is disabled: exit-code-only check
+            #[cfg(not(feature = "test-harness"))]
+            {
+                if let Some(success_code) = ctx.test_success_exit_code() {
+                    if result.exit_code == success_code {
+                        if ctx.config.verbose {
+                            println!("Test passed (exit code: {})", result.exit_code);
+                        }
+                        return Ok(());
+                    } else {
+                        return Err(Error::runner(format!(
+                            "Test failed: expected exit code {}, got {}",
+                            success_code, result.exit_code
+                        )));
+                    }
                 }
             }
         }

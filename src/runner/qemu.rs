@@ -4,6 +4,9 @@ use crate::core::error::{Error, Result};
 use crate::firmware::OvmfFirmware;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 /// QEMU runner for executing bootable images.
 pub struct QemuRunner;
@@ -108,33 +111,119 @@ impl Runner for QemuRunner {
             cmd.arg(arg);
         }
 
-        // Set up stdio
-        cmd.stdin(Stdio::inherit());
-        cmd.stdout(Stdio::inherit());
-        cmd.stderr(Stdio::inherit());
+        // Add env var args (CARGO_IMAGE_RUNNER_QEMU_ARGS)
+        for arg in &ctx.env_extra_args {
+            cmd.arg(arg);
+        }
+
+        // Add CLI passthrough args (-- args, highest priority)
+        for arg in &ctx.cli_extra_args {
+            cmd.arg(arg);
+        }
 
         // Run QEMU
         if ctx.config.verbose {
             println!("Executing: {:?}", cmd);
         }
-        let status = cmd.status().map_err(|e| {
-            Error::runner(format!(
-                "failed to execute {}: {}",
-                qemu_config.binary, e
-            ))
-        })?;
 
-        let exit_code = status.code().unwrap_or(-1);
-
-        // Check for test success code
         if ctx.is_test {
-            if let Some(success_code) = ctx.test_success_exit_code() {
-                return Ok(RunResult::new(exit_code, exit_code == success_code));
-            }
-        }
+            // Test mode: capture output and enforce timeout
+            cmd.stdin(Stdio::null());
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
 
-        // Otherwise, success is exit code 0
-        Ok(RunResult::new(exit_code, status.success()))
+            let mut child = cmd.spawn().map_err(|e| {
+                Error::runner(format!(
+                    "failed to execute {}: {}",
+                    qemu_config.binary, e
+                ))
+            })?;
+
+            // Set up timeout watchdog
+            let timed_out = Arc::new(AtomicBool::new(false));
+            let timeout_handle = if let Some(timeout_secs) = ctx.config.test.timeout {
+                let flag = timed_out.clone();
+                let child_id = child.id();
+                Some(std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(timeout_secs));
+                    if !flag.swap(true, Ordering::SeqCst) {
+                        // Timeout expired, kill the child process
+                        // Use kill via pid since we can't move the child
+                        #[cfg(unix)]
+                        {
+                            unsafe {
+                                libc::kill(child_id as i32, libc::SIGKILL);
+                            }
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            // On non-Unix, we'll rely on the wait below to handle it
+                            let _ = child_id;
+                        }
+                    }
+                }))
+            } else {
+                None
+            };
+
+            // Read stdout and stderr
+            let stdout = child.stdout.take();
+            let stderr = child.stderr.take();
+
+            let stdout_handle = std::thread::spawn(move || -> String {
+                stdout
+                    .map(|s| std::io::read_to_string(s).unwrap_or_default())
+                    .unwrap_or_default()
+            });
+
+            let stderr_handle = std::thread::spawn(move || -> String {
+                stderr
+                    .map(|s| std::io::read_to_string(s).unwrap_or_default())
+                    .unwrap_or_default()
+            });
+
+            let status = child.wait().map_err(|e| {
+                Error::runner(format!("failed to wait for {}: {}", qemu_config.binary, e))
+            })?;
+
+            // Signal the timeout thread that we're done (prevent spurious kill)
+            let was_timed_out = timed_out.swap(true, Ordering::SeqCst);
+            if let Some(handle) = timeout_handle {
+                let _ = handle.join();
+            }
+
+            let stdout_str = stdout_handle.join().unwrap_or_default();
+            let stderr_str = stderr_handle.join().unwrap_or_default();
+
+            let exit_code = status.code().unwrap_or(-1);
+            let success = if let Some(success_code) = ctx.test_success_exit_code() {
+                exit_code == success_code
+            } else {
+                status.success()
+            };
+
+            let mut result = RunResult::new(exit_code, success)
+                .with_output(stdout_str, stderr_str);
+            if was_timed_out {
+                result = result.with_timeout();
+            }
+            Ok(result)
+        } else {
+            // Normal mode: inherit stdio
+            cmd.stdin(Stdio::inherit());
+            cmd.stdout(Stdio::inherit());
+            cmd.stderr(Stdio::inherit());
+
+            let status = cmd.status().map_err(|e| {
+                Error::runner(format!(
+                    "failed to execute {}: {}",
+                    qemu_config.binary, e
+                ))
+            })?;
+
+            let exit_code = status.code().unwrap_or(-1);
+            Ok(RunResult::new(exit_code, status.success()))
+        }
     }
 
     fn is_available(&self) -> bool {
