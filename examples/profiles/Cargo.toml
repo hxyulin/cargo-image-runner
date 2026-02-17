@@ -1,0 +1,44 @@
+[package]
+name = "profiles"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[package.metadata.image-runner.boot]
+type = "uefi"
+
+[package.metadata.image-runner.bootloader]
+kind = "none"
+
+[package.metadata.image-runner.image]
+format = "directory"
+
+[package.metadata.image-runner.runner.qemu]
+memory = 256
+cores = 1
+
+[package.metadata.image-runner.run]
+extra-args = ["-serial", "stdio"]
+
+# Debug profile: more resources and GUI display
+[package.metadata.image-runner.profiles.debug.runner.qemu]
+memory = 1024
+cores = 4
+
+[package.metadata.image-runner.profiles.debug.run]
+gui = true
+
+# CI profile: headless with test support
+[package.metadata.image-runner.profiles.ci.runner.qemu]
+memory = 512
+
+[package.metadata.image-runner.profiles.ci.run]
+gui = false
+extra-args = ["-serial", "stdio", "-display", "none"]
+
+[package.metadata.image-runner.profiles.ci.test]
+timeout = 15
+success-exit-code = 33
+extra-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-display", "none"]
+
+[dependencies]

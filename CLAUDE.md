@@ -15,7 +15,7 @@ cargo build --no-default-features --features "uefi,limine,iso,qemu"  # selective
 - Bootloaders: `limine` (pulls `git2`), `grub`
 - Image formats: `iso` (pulls `hadris-iso`), `fat` (pulls `fatfs`/`fscommon`)
 - Runners: `qemu`
-- Optional: `progress` (pulls `indicatif`), `test-harness` (pulls `regex`)
+- Optional: `progress` (pulls `indicatif`)
 
 **CI**: Runs `cargo build && cargo test` on stable, beta, nightly + feature combination matrix (see `.github/workflows/ci.yml`).
 
@@ -48,7 +48,6 @@ Entry point is the **builder pattern** (`builder()` → `ImageRunnerBuilder` →
 | `image/` | `ImageBuilder` trait + impls: `directory`, `iso`, `fat`; `template` processor |
 | `runner/` | `Runner` trait + impl: `qemu` |
 | `firmware/` | UEFI firmware (`ovmf`) |
-| `harness/` | Test harness for parsing sub-test results from serial output (feature-gated: `test-harness`) |
 | `util/` | Filesystem helpers (`fs`), hashing (`hash`) |
 
 ## Examples
@@ -63,6 +62,8 @@ Located under `examples/`, each demonstrating a different configuration combinat
 | `uefi-fat` | UEFI | None | FAT |
 | `limine-fat` | UEFI | Limine | FAT |
 | `bios-limine-iso` | BIOS | Limine | ISO |
+| `profiles` | UEFI | None | Directory |
+| `extra-files` | Hybrid | Limine | Directory |
 
 ## Tests
 

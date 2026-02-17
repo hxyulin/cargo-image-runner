@@ -17,7 +17,7 @@ categories = ["development-tools", "os", "command-line-utilities"]
 exclude = [".github/", "CLAUDE.md"]
 
 [features]
-default = ["uefi", "bios", "limine", "iso", "qemu", "test-harness"]
+default = ["uefi", "bios", "limine", "iso", "qemu"]
 
 # Boot types
 bios = []
@@ -36,7 +36,6 @@ qemu = []
 
 # Optional
 progress = ["dep:indicatif"]
-test-harness = ["dep:regex"]
 
 [dependencies]
 # Core dependencies
@@ -56,7 +55,6 @@ fatfs = { version = "0.3", optional = true, features = ["std"] }
 fscommon = { version = "0.1", optional = true }
 ovmf-prebuilt = { version = "0.2.2", optional = true }
 indicatif = { version = "0.17", optional = true }
-regex = { version = "1", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

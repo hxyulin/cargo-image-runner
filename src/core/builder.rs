@@ -225,6 +225,12 @@ impl ImageRunner {
         ctx.cli_extra_args = self.cli_extra_args.clone();
         ctx.env_extra_args = crate::config::env::get_extra_qemu_args();
 
+        // Update ARGS template variable with CLI args
+        ctx.template_vars.insert(
+            "ARGS".to_string(),
+            ctx.cli_extra_args.join(" "),
+        );
+
         // Validate all components
         self.bootloader.validate_config(&ctx)?;
         self.image_builder.validate_boot_type(&ctx)?;
@@ -290,6 +296,12 @@ impl ImageRunner {
         ctx.cli_extra_args = self.cli_extra_args;
         ctx.env_extra_args = crate::config::env::get_extra_qemu_args();
 
+        // Update ARGS template variable with CLI args
+        ctx.template_vars.insert(
+            "ARGS".to_string(),
+            ctx.cli_extra_args.join(" "),
+        );
+
         // Validate all components
         self.bootloader.validate_config(&ctx)?;
         self.image_builder.validate_boot_type(&ctx)?;
@@ -354,39 +366,18 @@ impl ImageRunner {
 
         // Check result
         if ctx.is_test {
-            #[cfg(feature = "test-harness")]
-            {
-                let harness = crate::harness::TestHarness::new(&ctx.config.test.harness)?;
-                let test_output = harness.evaluate(&result);
-                harness.report(&test_output, result.captured_output.as_ref());
-
-                if !test_output.overall_success {
-                    if result.timed_out {
-                        return Err(Error::runner("test timed out"));
-                    }
-                    return Err(Error::runner(format!(
-                        "test result: {} passed, {} failed",
-                        test_output.passed, test_output.failed
-                    )));
-                }
-                return Ok(());
+            if result.timed_out {
+                return Err(Error::runner("test timed out"));
             }
 
-            // Fallback when test-harness feature is disabled: exit-code-only check
-            #[cfg(not(feature = "test-harness"))]
-            {
-                if let Some(success_code) = ctx.test_success_exit_code() {
-                    if result.exit_code == success_code {
-                        if ctx.config.verbose {
-                            println!("Test passed (exit code: {})", result.exit_code);
-                        }
-                        return Ok(());
-                    } else {
-                        return Err(Error::runner(format!(
-                            "Test failed: expected exit code {}, got {}",
-                            success_code, result.exit_code
-                        )));
-                    }
+            if let Some(success_code) = ctx.test_success_exit_code() {
+                if result.exit_code == success_code {
+                    return Ok(());
+                } else {
+                    return Err(Error::runner(format!(
+                        "Test failed: expected exit code {}, got {}",
+                        success_code, result.exit_code
+                    )));
                 }
             }
         }

@@ -10,7 +10,7 @@ A generic, highly customizable embedded/kernel development runner for Rust. Buil
 - **Trait-Based Architecture**: Easy to extend with custom bootloaders, image builders, and runners
 - **Builder Pattern API**: Ergonomic, fluent API for programmatic use
 - **Template Variables**: Powerful variable substitution in config files
-- **Test Integration**: Automatic test detection, execution, and sub-test harness
+- **Test Integration**: Automatic test detection and execution
 - **Environment Variable Overrides**: Runtime configuration without editing files
 - **Profile System**: Named configuration presets for different workflows
 - **CLI Arg Passthrough**: Pass extra QEMU arguments via `--`
@@ -183,11 +183,6 @@ extra-args = [                  # Additional args for test runs only
     "-device", "isa-debug-exit,iobase=0xf4,iosize=0x4"
 ]
 timeout = 60                    # Test timeout in seconds
-
-[package.metadata.image-runner.test.harness]
-show_output = "on-failure"      # When to show captured output: "always", "never", "on-failure"
-pass-pattern = "\\[(?:PASS|OK|PASSED)\\]\\s+(.*)"   # Regex for matching passed tests
-fail-pattern = "\\[(?:FAIL|FAILED|ERROR)\\]\\s+(.*)" # Regex for matching failed tests
 ```
 
 Test binaries are automatically detected by examining the executable name for Cargo's hash suffix pattern (e.g., `my-test-a1b2c3d4e5f6a7b8`).
@@ -472,14 +467,16 @@ fn main() -> cargo_image_runner::Result<()> {
 
 Located under `examples/`, each demonstrating a different configuration combination:
 
-| Example | Boot | Bootloader | Image |
-|---------|------|------------|-------|
-| `uefi-simple` | UEFI | None | Directory |
-| `limine-directory` | Hybrid | Limine | Directory |
-| `limine-iso` | Hybrid | Limine | ISO |
-| `uefi-fat` | UEFI | None | FAT |
-| `limine-fat` | UEFI | Limine | FAT |
-| `bios-limine-iso` | BIOS | Limine | ISO |
+| Example | Boot | Bootloader | Image | Notes |
+|---------|------|------------|-------|-------|
+| `uefi-simple` | UEFI | None | Directory | Simplest possible setup |
+| `limine-directory` | Hybrid | Limine | Directory | Fast iteration with Limine |
+| `limine-iso` | Hybrid | Limine | ISO | Bootable ISO image |
+| `uefi-fat` | UEFI | None | FAT | Real FAT filesystem image |
+| `limine-fat` | UEFI | Limine | FAT | Limine with FAT image |
+| `bios-limine-iso` | BIOS | Limine | ISO | Legacy BIOS boot |
+| `profiles` | UEFI | None | Directory | Profile system and env var overrides |
+| `extra-files` | Hybrid | Limine | Directory | Extra files and custom template variables |
 
 ## Feature Flags
 
@@ -552,7 +549,6 @@ pub trait Runner {
 | `image/` | `ImageBuilder` trait + impls: `directory`, `iso`, `fat`; `template` processor |
 | `runner/` | `Runner` trait + impl: `qemu` |
 | `firmware/` | UEFI firmware (`ovmf`) |
-| `harness/` | Test harness for parsing sub-test results from serial output |
 | `util/` | Filesystem helpers (`fs`), hashing (`hash`) |
 
 ### Build Artifacts

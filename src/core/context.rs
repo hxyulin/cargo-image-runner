@@ -129,6 +129,11 @@ impl Context {
             "IS_TEST".to_string(),
             if self.is_test { "1" } else { "0" }.to_string(),
         );
+
+        // ARGS: CLI extra args joined with spaces (for kernel command line).
+        // Initialized empty here; populated later when cli_extra_args are available.
+        self.template_vars
+            .insert("ARGS".to_string(), String::new());
     }
 
     /// Get the appropriate extra arguments based on whether this is a test run.

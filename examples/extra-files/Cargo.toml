@@ -1,0 +1,22 @@
+[package]
+name = "extra-files"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[package.metadata.image-runner.boot]
+type = "hybrid"
+
+[package.metadata.image-runner.bootloader]
+kind = "limine"
+config-file = "limine.conf"
+extra-files = ["boot-data.txt"]
+
+[package.metadata.image-runner.image]
+format = "directory"
+
+[package.metadata.image-runner.variables]
+TIMEOUT = "5"
+KERNEL_LOG_LEVEL = "debug"
+
+[dependencies]

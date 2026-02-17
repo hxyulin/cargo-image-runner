@@ -116,9 +116,12 @@ impl Runner for QemuRunner {
             cmd.arg(arg);
         }
 
-        // Add CLI passthrough args (-- args, highest priority)
-        for arg in &ctx.cli_extra_args {
-            cmd.arg(arg);
+        // Add CLI passthrough args — only in non-test mode.
+        // In test mode, these are forwarded via {{ARGS}} to kernel cmdline instead.
+        if !ctx.is_test {
+            for arg in &ctx.cli_extra_args {
+                cmd.arg(arg);
+            }
         }
 
         // Run QEMU
@@ -127,12 +130,13 @@ impl Runner for QemuRunner {
         }
 
         if ctx.is_test {
-            // Test mode: capture output and enforce timeout
+            // Test mode: inherit stdout/stderr so serial output is visible
+            // in real-time, enforce timeout, check exit code.
             cmd.stdin(Stdio::null());
-            cmd.stdout(Stdio::piped());
-            cmd.stderr(Stdio::piped());
+            cmd.stdout(Stdio::inherit());
+            cmd.stderr(Stdio::inherit());
 
-            let mut child = cmd.spawn().map_err(|e| {
+            let child = cmd.spawn().map_err(|e| {
                 Error::runner(format!(
                     "failed to execute {}: {}",
                     qemu_config.binary, e
@@ -147,8 +151,6 @@ impl Runner for QemuRunner {
                 Some(std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_secs(timeout_secs));
                     if !flag.swap(true, Ordering::SeqCst) {
-                        // Timeout expired, kill the child process
-                        // Use kill via pid since we can't move the child
                         #[cfg(unix)]
                         {
                             unsafe {
@@ -157,7 +159,6 @@ impl Runner for QemuRunner {
                         }
                         #[cfg(not(unix))]
                         {
-                            // On non-Unix, we'll rely on the wait below to handle it
                             let _ = child_id;
                         }
                     }
@@ -166,44 +167,23 @@ impl Runner for QemuRunner {
                 None
             };
 
-            // Read stdout and stderr
-            let stdout = child.stdout.take();
-            let stderr = child.stderr.take();
-
-            let stdout_handle = std::thread::spawn(move || -> String {
-                stdout
-                    .map(|s| std::io::read_to_string(s).unwrap_or_default())
-                    .unwrap_or_default()
-            });
-
-            let stderr_handle = std::thread::spawn(move || -> String {
-                stderr
-                    .map(|s| std::io::read_to_string(s).unwrap_or_default())
-                    .unwrap_or_default()
-            });
-
-            let status = child.wait().map_err(|e| {
+            let status = child.wait_with_output().map_err(|e| {
                 Error::runner(format!("failed to wait for {}: {}", qemu_config.binary, e))
             })?;
 
-            // Signal the timeout thread that we're done (prevent spurious kill)
+            // Signal the timeout thread that we're done (prevent spurious kill).
+            // Don't join — it would block until the full timeout elapses.
+            // The thread checks the flag and returns without killing.
             let was_timed_out = timed_out.swap(true, Ordering::SeqCst);
-            if let Some(handle) = timeout_handle {
-                let _ = handle.join();
-            }
 
-            let stdout_str = stdout_handle.join().unwrap_or_default();
-            let stderr_str = stderr_handle.join().unwrap_or_default();
-
-            let exit_code = status.code().unwrap_or(-1);
+            let exit_code = status.status.code().unwrap_or(-1);
             let success = if let Some(success_code) = ctx.test_success_exit_code() {
                 exit_code == success_code
             } else {
-                status.success()
+                status.status.success()
             };
 
-            let mut result = RunResult::new(exit_code, success)
-                .with_output(stdout_str, stderr_str);
+            let mut result = RunResult::new(exit_code, success);
             if was_timed_out {
                 result = result.with_timeout();
             }

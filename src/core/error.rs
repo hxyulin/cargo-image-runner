@@ -42,10 +42,6 @@ pub enum Error {
     #[error("Invalid configuration value for {field}: {value}")]
     InvalidConfig { field: String, value: String },
 
-    /// Test harness error (e.g., invalid regex pattern).
-    #[error("Test harness error: {0}")]
-    TestHarness(String),
-
     /// Feature not enabled.
     #[error("Feature '{0}' is not enabled. Enable it in Cargo.toml features.")]
     FeatureNotEnabled(String),
@@ -105,11 +101,6 @@ impl Error {
     /// Create a template error.
     pub fn template(msg: impl Into<String>) -> Self {
         Error::Template(msg.into())
-    }
-
-    /// Create a test harness error.
-    pub fn test_harness(msg: impl Into<String>) -> Self {
-        Error::TestHarness(msg.into())
     }
 
     /// Create a feature not enabled error.

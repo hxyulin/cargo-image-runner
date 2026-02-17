@@ -6,6 +6,7 @@ use std::path::PathBuf;
 #[command(name = "cargo-image-runner")]
 #[command(about = "Build and run bootable images for embedded/kernel development")]
 #[command(version)]
+#[command(trailing_var_arg = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Option<Command>,
@@ -14,9 +15,9 @@ pub struct Args {
     #[arg(value_name = "EXECUTABLE")]
     executable: Option<PathBuf>,
 
-    /// Additional QEMU arguments (when no subcommand is given)
-    #[clap(last = true)]
-    qemu_args: Vec<String>,
+    /// Additional arguments passed by cargo (forwarded to kernel in test mode, QEMU in run mode)
+    #[arg(allow_hyphen_values = true)]
+    extra_args: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -76,7 +77,7 @@ fn run() -> cargo_image_runner::Result<()> {
         None => {
             // Default behavior: run the executable
             if let Some(executable) = args.executable {
-                run_executable(executable, args.qemu_args)?;
+                run_executable(executable, args.extra_args)?;
             } else {
                 eprintln!("Error: No executable specified");
                 eprintln!("Usage: cargo-image-runner <EXECUTABLE>");
