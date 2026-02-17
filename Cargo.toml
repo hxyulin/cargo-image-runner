@@ -4,7 +4,7 @@ default-members = ["."]
 
 [package]
 name = "cargo-image-runner"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 license = "MIT"
 description = "A generic, customizable runner for building and booting kernel/embedded images with Limine, GRUB, QEMU, and more"
