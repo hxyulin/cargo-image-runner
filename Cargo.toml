@@ -4,7 +4,7 @@ default-members = ["."]
 
 [package]
 name = "cargo-image-runner"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2024"
 license = "MIT"
 description = "A generic, customizable runner for building and booting kernel/embedded images with Limine, GRUB, QEMU, and more"
@@ -17,7 +17,11 @@ categories = ["development-tools", "os", "command-line-utilities"]
 exclude = [".github/", "CLAUDE.md"]
 
 [features]
-default = ["uefi", "bios", "limine", "iso", "qemu"]
+default = ["cli", "cargo-metadata", "uefi", "bios", "limine", "iso", "qemu"]
+
+# CLI and metadata
+cli = ["dep:clap", "cargo-metadata"]
+cargo-metadata = ["dep:cargo_metadata"]
 
 # Boot types
 bios = []
@@ -37,13 +41,18 @@ qemu = []
 # Optional
 progress = ["dep:indicatif"]
 
+[[bin]]
+name = "cargo-image-runner"
+path = "src/main.rs"
+required-features = ["cli"]
+
 [dependencies]
 # Core dependencies
-cargo_metadata = "0.18.1"
+cargo_metadata = { version = "0.18.1", optional = true }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 serde_plain = "1.0.2"
-clap = { version = "4.5.51", features = ["derive"] }
+clap = { version = "4.5.51", features = ["derive"], optional = true }
 thiserror = "2.0"
 toml = "0.8"
 

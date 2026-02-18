@@ -63,6 +63,7 @@ pub enum Error {
     Json(#[from] serde_json::Error),
 
     /// Cargo metadata error.
+    #[cfg(feature = "cargo-metadata")]
     #[error("Cargo metadata error: {0}")]
     CargoMetadata(#[from] cargo_metadata::Error),
 

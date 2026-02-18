@@ -1,5 +1,6 @@
 use super::Config;
 use crate::core::error::{Error, Result};
+#[cfg(feature = "cargo-metadata")]
 use cargo_metadata::MetadataCommand;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -20,7 +21,7 @@ impl ConfigLoader {
         Self {
             workspace_root: None,
             config_file: None,
-            use_cargo_metadata: true,
+            use_cargo_metadata: cfg!(feature = "cargo-metadata"),
         }
     }
 
@@ -53,14 +54,22 @@ impl ConfigLoader {
     pub fn load(self) -> Result<(Config, PathBuf)> {
         let mut config = Config::default();
         let workspace_root;
+        #[allow(unused_mut)]
         let mut profiles: HashMap<String, serde_json::Value> = HashMap::new();
 
         // Load from Cargo metadata if enabled
         if self.use_cargo_metadata {
-            let (root, cargo_config, cargo_profiles) = self.load_cargo_metadata()?;
-            workspace_root = root;
-            config = Self::merge_configs(config, cargo_config);
-            profiles = cargo_profiles;
+            #[cfg(feature = "cargo-metadata")]
+            {
+                let (root, cargo_config, cargo_profiles) = self.load_cargo_metadata()?;
+                workspace_root = root;
+                config = Self::merge_configs(config, cargo_config);
+                profiles = cargo_profiles;
+            }
+            #[cfg(not(feature = "cargo-metadata"))]
+            {
+                return Err(Error::feature_not_enabled("cargo-metadata"));
+            }
         } else {
             workspace_root = self
                 .workspace_root
@@ -111,6 +120,7 @@ impl ConfigLoader {
     /// Priority: package metadata > workspace metadata > defaults.
     /// Profiles are collected from both workspace and package metadata
     /// (package profiles override workspace profiles with the same name).
+    #[cfg(feature = "cargo-metadata")]
     fn load_cargo_metadata(
         &self,
     ) -> Result<(PathBuf, Config, HashMap<String, serde_json::Value>)> {
@@ -223,6 +233,7 @@ impl Default for ConfigLoader {
 ///
 /// Profiles live at `value["profiles"]` as `{ name: { ...config fields... } }`.
 /// Package-level profiles override workspace-level profiles with the same name.
+#[cfg(feature = "cargo-metadata")]
 fn extract_profiles(
     value: &serde_json::Value,
     profiles: &mut HashMap<String, serde_json::Value>,
@@ -423,6 +434,7 @@ TIMEOUT = "5"
         assert_eq!(base["verbose"], true);
     }
 
+    #[cfg(feature = "cargo-metadata")]
     #[test]
     fn test_extract_profiles_from_json() {
         let value = serde_json::json!({
@@ -445,6 +457,7 @@ TIMEOUT = "5"
         assert_eq!(profiles["debug"]["verbose"], true);
     }
 
+    #[cfg(feature = "cargo-metadata")]
     #[test]
     fn test_extract_profiles_none() {
         let value = serde_json::json!({ "boot": { "type": "uefi" } });

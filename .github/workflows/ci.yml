@@ -33,6 +33,7 @@ jobs:
           - "bios,limine,iso,qemu"
           - "uefi,bios,qemu"
           - "uefi,fat,qemu"
+          - "uefi,qemu"
           - ""
     steps:
       - uses: actions/checkout@v4

@@ -1,5 +1,7 @@
 use crate::bootloader::Bootloader;
-use crate::config::{BootloaderKind, Config, ConfigLoader, ImageFormat, RunnerKind};
+use crate::config::{BootloaderKind, Config, ImageFormat, RunnerKind};
+#[cfg(feature = "cargo-metadata")]
+use crate::config::ConfigLoader;
 use crate::core::context::Context;
 use crate::core::error::{Error, Result};
 use crate::image::ImageBuilder;
@@ -38,6 +40,7 @@ impl ImageRunnerBuilder {
     }
 
     /// Load configuration from Cargo.toml metadata.
+    #[cfg(feature = "cargo-metadata")]
     pub fn from_cargo_metadata(mut self) -> Result<Self> {
         let (config, workspace_root) = ConfigLoader::new().load()?;
         self.config = Some(config);
@@ -46,6 +49,7 @@ impl ImageRunnerBuilder {
     }
 
     /// Load configuration from a standalone TOML file.
+    #[cfg(feature = "cargo-metadata")]
     pub fn from_config_file(mut self, path: impl Into<PathBuf>) -> Result<Self> {
         let (config, workspace_root) = ConfigLoader::new().config_file(path).load()?;
         self.config = Some(config);

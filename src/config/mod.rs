@@ -48,6 +48,26 @@ pub struct Config {
     pub verbose: bool,
 }
 
+impl Config {
+    /// Parse a `Config` directly from a TOML string.
+    ///
+    /// This bypasses `ConfigLoader` entirely — no profiles, no env var overrides.
+    /// Useful for standalone/library consumers who don't use `cargo_metadata`.
+    pub fn from_toml_str(toml: &str) -> crate::core::Result<Self> {
+        toml::from_str(toml).map_err(|e| crate::core::Error::config(format!("failed to parse TOML config: {}", e)))
+    }
+
+    /// Parse a `Config` from a TOML file on disk.
+    ///
+    /// This bypasses `ConfigLoader` entirely — no profiles, no env var overrides.
+    /// Useful for standalone/library consumers who don't use `cargo_metadata`.
+    pub fn from_toml_file(path: impl AsRef<std::path::Path>) -> crate::core::Result<Self> {
+        let content = std::fs::read_to_string(path.as_ref())
+            .map_err(|e| crate::core::Error::config(format!("failed to read config file: {}", e)))?;
+        Self::from_toml_str(&content)
+    }
+}
+
 /// Boot type configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BootConfig {

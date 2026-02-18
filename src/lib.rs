@@ -6,12 +6,36 @@
 //!
 //! # Quick Start
 //!
-//! ## Using the Builder API
+//! ## Standalone Usage (no `cargo_metadata` or `clap` required)
 //!
 //! ```no_run
-//! use cargo_image_runner::builder;
+//! use cargo_image_runner::{builder, Config};
 //!
 //! # fn main() -> cargo_image_runner::Result<()> {
+//! let config = Config::from_toml_str(r#"
+//!     [boot]
+//!     type = "uefi"
+//!     [bootloader]
+//!     kind = "none"
+//!     [image]
+//!     format = "directory"
+//! "#)?;
+//!
+//! builder()
+//!     .with_config(config)
+//!     .workspace_root(".")
+//!     .executable("target/x86_64-unknown-none/debug/my-kernel")
+//!     .run()
+//! # }
+//! ```
+//!
+//! ## Using Cargo.toml Metadata (requires `cargo-metadata` feature)
+//!
+//! ```no_run
+//! # #[cfg(feature = "cargo-metadata")]
+//! # fn main() -> cargo_image_runner::Result<()> {
+//! use cargo_image_runner::builder;
+//!
 //! // Load configuration from Cargo.toml and run
 //! builder()
 //!     .from_cargo_metadata()?
@@ -20,6 +44,8 @@
 //!     .qemu()
 //!     .run()
 //! # }
+//! # #[cfg(not(feature = "cargo-metadata"))]
+//! # fn main() {}
 //! ```
 //!
 //! ## Configuration in Cargo.toml
@@ -102,15 +128,24 @@
 //!
 //! # Features
 //!
-//! - `default` - Enables `uefi`, `bios`, `limine`, `iso`, and `qemu`
+//! - `default` - Enables `cli`, `cargo-metadata`, `uefi`, `bios`, `limine`, `iso`, and `qemu`
+//! - `cli` - CLI binary and argument parsing (implies `cargo-metadata`)
+//! - `cargo-metadata` - Load config from `Cargo.toml` via `cargo_metadata`
 //! - `uefi` - UEFI boot support (includes OVMF firmware)
 //! - `bios` - BIOS boot support
 //! - `limine` - Limine bootloader (requires git)
 //! - `grub` - GRUB bootloader
-//! - `iso` - ISO image format (not yet implemented)
-//! - `fat` - FAT filesystem image format (not yet implemented)
+//! - `iso` - ISO image format
+//! - `fat` - FAT filesystem image format
 //! - `qemu` - QEMU runner
-//! - `progress` - Progress reporting (optional, not yet implemented)
+//! - `progress` - Progress reporting (optional)
+//!
+//! For standalone library use without `clap` or `cargo_metadata`:
+//!
+//! ```toml
+//! [dependencies]
+//! cargo-image-runner = { version = "0.4", default-features = false, features = ["uefi", "qemu"] }
+//! ```
 
 pub mod bootloader;
 pub mod config;
@@ -131,14 +166,22 @@ pub use config::{BootType, BootloaderKind, Config, ImageFormat};
 /// # Example
 ///
 /// ```no_run
-/// use cargo_image_runner::builder;
+/// use cargo_image_runner::{builder, Config};
 ///
 /// # fn main() -> cargo_image_runner::Result<()> {
+/// let config = Config::from_toml_str(r#"
+///     [boot]
+///     type = "uefi"
+///     [bootloader]
+///     kind = "none"
+///     [image]
+///     format = "directory"
+/// "#)?;
+///
 /// builder()
-///     .from_cargo_metadata()?
-///     .no_bootloader()
-///     .directory_output()
-///     .qemu()
+///     .with_config(config)
+///     .workspace_root(".")
+///     .executable("target/x86_64-unknown-none/debug/my-kernel")
 ///     .run()
 /// # }
 /// ```
