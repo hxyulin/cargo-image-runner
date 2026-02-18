@@ -10,7 +10,9 @@ type = "hybrid"
 [package.metadata.image-runner.bootloader]
 kind = "limine"
 config-file = "limine.conf"
-extra-files = ["boot-data.txt"]
+
+[package.metadata.image-runner.extra-files]
+"boot-data.txt" = "boot-data.txt"
 
 [package.metadata.image-runner.image]
 format = "directory"

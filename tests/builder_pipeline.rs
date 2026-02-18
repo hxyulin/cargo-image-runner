@@ -202,6 +202,120 @@ fn test_iso_with_multiple_files() {
     assert!(size > 4096, "ISO should be larger than the input file, got {} bytes", size);
 }
 
+/// Test extra-files are placed at correct destination paths in directory output.
+#[test]
+fn test_extra_files_directory_pipeline() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // Create a fake executable
+    let exe = dir.path().join("kernel.efi");
+    std::fs::write(&exe, b"fake uefi executable").unwrap();
+
+    // Create extra source files
+    std::fs::write(dir.path().join("data.txt"), "hello world").unwrap();
+    std::fs::create_dir_all(dir.path().join("build")).unwrap();
+    std::fs::write(dir.path().join("build/initramfs.cpio"), "fake initramfs").unwrap();
+
+    let mut config = Config::default();
+    config.boot.boot_type = BootType::Uefi;
+    config.bootloader.kind = BootloaderKind::None;
+    config.image.format = ImageFormat::Directory;
+    config
+        .extra_files
+        .insert("boot/data.txt".to_string(), "data.txt".to_string());
+    config
+        .extra_files
+        .insert("boot/initramfs.cpio".to_string(), "build/initramfs.cpio".to_string());
+
+    let runner = ImageRunnerBuilder::new()
+        .with_config(config)
+        .workspace_root(dir.path())
+        .executable(&exe)
+        .build()
+        .unwrap();
+
+    let image_path = runner.build_image().unwrap();
+
+    // Verify extra files at correct destination paths
+    let data_file = image_path.join("boot/data.txt");
+    assert!(data_file.exists(), "data.txt should exist at {:?}", data_file);
+    assert_eq!(std::fs::read_to_string(&data_file).unwrap(), "hello world");
+
+    let initramfs = image_path.join("boot/initramfs.cpio");
+    assert!(
+        initramfs.exists(),
+        "initramfs.cpio should exist at {:?}",
+        initramfs
+    );
+    assert_eq!(
+        std::fs::read_to_string(&initramfs).unwrap(),
+        "fake initramfs"
+    );
+}
+
+/// Test that missing extra source file produces a clear error.
+#[test]
+fn test_extra_files_missing_source_error() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let exe = dir.path().join("kernel.efi");
+    std::fs::write(&exe, b"fake").unwrap();
+
+    let mut config = Config::default();
+    config.boot.boot_type = BootType::Uefi;
+    config.bootloader.kind = BootloaderKind::None;
+    config.image.format = ImageFormat::Directory;
+    config
+        .extra_files
+        .insert("boot/missing.txt".to_string(), "nonexistent.txt".to_string());
+
+    let runner = ImageRunnerBuilder::new()
+        .with_config(config)
+        .workspace_root(dir.path())
+        .executable(&exe)
+        .build()
+        .unwrap();
+
+    let result = runner.build_image();
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("extra file not found"),
+        "error should mention extra file not found, got: {}",
+        err
+    );
+}
+
+/// Test that empty extra-files is a no-op.
+#[test]
+fn test_empty_extra_files_noop() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let exe = dir.path().join("kernel.efi");
+    std::fs::write(&exe, b"fake uefi executable").unwrap();
+
+    // Config with empty extra_files (default)
+    let mut config = Config::default();
+    config.boot.boot_type = BootType::Uefi;
+    config.bootloader.kind = BootloaderKind::None;
+    config.image.format = ImageFormat::Directory;
+    assert!(config.extra_files.is_empty());
+
+    let runner = ImageRunnerBuilder::new()
+        .with_config(config)
+        .workspace_root(dir.path())
+        .executable(&exe)
+        .build()
+        .unwrap();
+
+    let image_path = runner.build_image().unwrap();
+    assert!(image_path.exists());
+
+    // Only the executable should be placed, no extra files
+    let bootx64 = image_path.join("efi/boot/bootx64.efi");
+    assert!(bootx64.exists());
+}
+
 /// Test FAT image creation with UEFI + None bootloader.
 #[cfg(feature = "fat")]
 #[test]

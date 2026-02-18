@@ -154,24 +154,6 @@ impl Bootloader for LimineBootloader {
             )));
         }
 
-        // Add any extra files specified in config
-        for extra_file in &ctx.config.bootloader.extra_files {
-            let src = ctx.workspace_root.join(extra_file);
-            if !src.exists() {
-                return Err(Error::config(format!(
-                    "extra bootloader file not found: {}",
-                    src.display()
-                )));
-            }
-
-            let dest = extra_file
-                .file_name()
-                .ok_or_else(|| Error::config("invalid extra file path"))?
-                .into();
-
-            configs.push(ConfigFile::new(src, dest));
-        }
-
         Ok(configs)
     }
 

@@ -39,6 +39,10 @@ pub struct Config {
     #[serde(default)]
     pub variables: HashMap<String, String>,
 
+    /// Extra files to include in the image (dest path → source path).
+    #[serde(default, rename = "extra-files")]
+    pub extra_files: HashMap<String, String>,
+
     /// Enable verbose output (show build progress messages).
     #[serde(default)]
     pub verbose: bool,
@@ -93,10 +97,6 @@ pub struct BootloaderConfig {
     /// Path to bootloader configuration file.
     #[serde(rename = "config-file")]
     pub config_file: Option<PathBuf>,
-
-    /// Additional files to include.
-    #[serde(default, rename = "extra-files")]
-    pub extra_files: Vec<PathBuf>,
 
     /// Limine-specific configuration.
     #[serde(default)]
@@ -303,7 +303,6 @@ mod tests {
         assert_eq!(config.boot.boot_type, BootType::Uefi);
         assert_eq!(config.bootloader.kind, BootloaderKind::None);
         assert!(config.bootloader.config_file.is_none());
-        assert!(config.bootloader.extra_files.is_empty());
         assert_eq!(config.image.format, ImageFormat::Directory);
         assert!(config.image.output.is_none());
         assert_eq!(config.image.volume_label, "BOOT");
@@ -314,6 +313,7 @@ mod tests {
         assert!(!config.run.gui);
         assert!(config.run.extra_args.is_empty());
         assert!(config.variables.is_empty());
+        assert!(config.extra_files.is_empty());
         assert!(!config.verbose);
     }
 
@@ -340,7 +340,6 @@ mod tests {
         [bootloader]
         kind = "limine"
         config-file = "limine.conf"
-        extra-files = ["extra.bin"]
 
         [bootloader.limine]
         version = "v8.4.0-binary"
@@ -370,6 +369,9 @@ mod tests {
 
         [variables]
         TIMEOUT = "5"
+
+        [extra-files]
+        "boot/extra.bin" = "extra.bin"
         "#;
         let config: Config = toml::from_str(toml_str).unwrap();
         assert_eq!(config.boot.boot_type, BootType::Hybrid);
@@ -389,6 +391,7 @@ mod tests {
         assert_eq!(config.test.timeout, Some(30));
         assert!(config.run.gui);
         assert_eq!(config.variables.get("TIMEOUT").unwrap(), "5");
+        assert_eq!(config.extra_files.get("boot/extra.bin").unwrap(), "extra.bin");
         assert!(config.verbose);
     }
 
@@ -449,5 +452,34 @@ mod tests {
     fn test_limine_config_default_version() {
         let limine = LimineConfig::default();
         assert_eq!(limine.version, "v8.x-binary");
+    }
+
+    #[test]
+    fn test_extra_files_deserialize_empty() {
+        let toml_str = r#"
+        [boot]
+        type = "uefi"
+        "#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert!(config.extra_files.is_empty());
+    }
+
+    #[test]
+    fn test_extra_files_deserialize_nested_paths() {
+        let toml_str = r#"
+        [extra-files]
+        "boot/initramfs.cpio" = "build/initramfs.cpio"
+        "boot/data/config.txt" = "data/config.txt"
+        "#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.extra_files.len(), 2);
+        assert_eq!(
+            config.extra_files.get("boot/initramfs.cpio").unwrap(),
+            "build/initramfs.cpio"
+        );
+        assert_eq!(
+            config.extra_files.get("boot/data/config.txt").unwrap(),
+            "data/config.txt"
+        );
     }
 }

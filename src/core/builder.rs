@@ -280,6 +280,9 @@ impl ImageRunner {
             }
         }
 
+        // Add extra files from config
+        all_files.extend(collect_extra_files(&ctx)?);
+
         // Build image
         if ctx.config.verbose {
             println!("Building image: {}", self.image_builder.name());
@@ -352,6 +355,9 @@ impl ImageRunner {
             }
         }
 
+        // Add extra files from config
+        all_files.extend(collect_extra_files(&ctx)?);
+
         // Build image
         if ctx.config.verbose {
             println!("Building image: {}", self.image_builder.name());
@@ -391,6 +397,28 @@ impl ImageRunner {
 
         Ok(())
     }
+}
+
+// --- Extra Files ---
+
+/// Collect extra files specified in config, resolving source paths relative to workspace root.
+fn collect_extra_files(ctx: &Context) -> Result<Vec<crate::bootloader::FileEntry>> {
+    let mut files = Vec::new();
+    for (dest, src) in &ctx.config.extra_files {
+        let source_path = ctx.workspace_root.join(src);
+        if !source_path.exists() {
+            return Err(Error::config(format!(
+                "extra file not found: {} (resolved to {})",
+                src,
+                source_path.display()
+            )));
+        }
+        files.push(crate::bootloader::FileEntry::new(
+            source_path,
+            PathBuf::from(dest),
+        ));
+    }
+    Ok(files)
 }
 
 // --- Factory Functions ---

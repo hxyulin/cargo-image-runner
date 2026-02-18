@@ -191,6 +191,14 @@ fn check_config() -> cargo_image_runner::Result<()> {
         }
     }
 
+    // Show extra files
+    if !config.extra_files.is_empty() {
+        println!("\nExtra files:");
+        for (dest, src) in &config.extra_files {
+            println!("  {} <- {}", dest, src);
+        }
+    }
+
     // Check QEMU availability
     #[cfg(feature = "qemu")]
     {

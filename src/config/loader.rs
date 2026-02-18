@@ -204,6 +204,11 @@ impl ConfigLoader {
             base.variables.insert(k, v);
         }
 
+        // Merge extra_files (override wins per-key, base keys preserved)
+        for (k, v) in override_cfg.extra_files {
+            base.extra_files.insert(k, v);
+        }
+
         base
     }
 }
@@ -355,6 +360,28 @@ TIMEOUT = "5"
         let loader = ConfigLoader::new().no_cargo_metadata();
         let result = loader.load();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_merge_configs_extra_files_merging() {
+        let mut base = Config::default();
+        base.extra_files
+            .insert("boot/a.txt".to_string(), "a.txt".to_string());
+        base.extra_files
+            .insert("boot/b.txt".to_string(), "b.txt".to_string());
+
+        let mut override_cfg = Config::default();
+        override_cfg
+            .extra_files
+            .insert("boot/b.txt".to_string(), "new_b.txt".to_string());
+        override_cfg
+            .extra_files
+            .insert("boot/c.txt".to_string(), "c.txt".to_string());
+
+        let merged = ConfigLoader::merge_configs(base, override_cfg);
+        assert_eq!(merged.extra_files.get("boot/a.txt").unwrap(), "a.txt");
+        assert_eq!(merged.extra_files.get("boot/b.txt").unwrap(), "new_b.txt");
+        assert_eq!(merged.extra_files.get("boot/c.txt").unwrap(), "c.txt");
     }
 
     #[test]

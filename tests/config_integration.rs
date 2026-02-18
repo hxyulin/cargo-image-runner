@@ -151,4 +151,65 @@ fn test_config_defaults_without_file() {
     assert_eq!(config.bootloader.kind, BootloaderKind::None);
     assert_eq!(config.image.format, ImageFormat::Directory);
     assert!(config.variables.is_empty());
+    assert!(config.extra_files.is_empty());
+}
+
+#[test]
+fn test_extra_files_config_parsing() {
+    let toml_str = r#"
+[boot]
+type = "uefi"
+
+[extra-files]
+"boot/initramfs.cpio" = "build/initramfs.cpio"
+"boot/data.txt" = "data/boot-data.txt"
+"config/settings.cfg" = "settings.cfg"
+"#;
+    let config: cargo_image_runner::Config = toml::from_str(toml_str).unwrap();
+
+    assert_eq!(config.extra_files.len(), 3);
+    assert_eq!(
+        config.extra_files.get("boot/initramfs.cpio").unwrap(),
+        "build/initramfs.cpio"
+    );
+    assert_eq!(
+        config.extra_files.get("boot/data.txt").unwrap(),
+        "data/boot-data.txt"
+    );
+    assert_eq!(
+        config.extra_files.get("config/settings.cfg").unwrap(),
+        "settings.cfg"
+    );
+}
+
+#[test]
+fn test_extra_files_via_config_loader() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("image-runner.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[boot]
+type = "uefi"
+
+[extra-files]
+"boot/data.txt" = "data.txt"
+"modules/driver.ko" = "build/driver.ko"
+"#,
+    )
+    .unwrap();
+
+    let (config, _) = ConfigLoader::new()
+        .no_cargo_metadata()
+        .workspace_root(dir.path())
+        .config_file(&config_path)
+        .load()
+        .unwrap();
+
+    assert_eq!(config.extra_files.len(), 2);
+    assert_eq!(config.extra_files.get("boot/data.txt").unwrap(), "data.txt");
+    assert_eq!(
+        config.extra_files.get("modules/driver.ko").unwrap(),
+        "build/driver.ko"
+    );
 }

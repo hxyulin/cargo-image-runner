@@ -13,7 +13,7 @@ Demonstrates including extra files in the boot image and using custom template v
 
 ## Key Concepts
 
-- **Extra files**: The `extra-files` field in bootloader config copies additional files into the boot image root
+- **Extra files**: The `[package.metadata.image-runner.extra-files]` table maps destination paths to source paths, allowing files to be placed at specific locations in the boot image
 - **Custom template variables**: User-defined variables (`TIMEOUT`, `KERNEL_LOG_LEVEL`) are substituted in `limine.conf`
 - **Built-in variables**: `{{EXECUTABLE_NAME}}` is automatically set to the kernel binary filename
 - **Variable override**: Variables can be overridden at runtime with `CARGO_IMAGE_RUNNER_VAR_<NAME>=<value>`
