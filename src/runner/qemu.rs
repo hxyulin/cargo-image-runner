@@ -145,7 +145,7 @@ impl Runner for QemuRunner {
 
             // Set up timeout watchdog
             let timed_out = Arc::new(AtomicBool::new(false));
-            let timeout_handle = if let Some(timeout_secs) = ctx.config.test.timeout {
+            let _timeout_handle = if let Some(timeout_secs) = ctx.config.test.timeout {
                 let flag = timed_out.clone();
                 let child_id = child.id();
                 Some(std::thread::spawn(move || {

@@ -413,9 +413,12 @@ fn collect_extra_files(ctx: &Context) -> Result<Vec<crate::bootloader::FileEntry
                 source_path.display()
             )));
         }
+        // Strip leading '/' so dest is always relative to image root.
+        // Users may write "/boot/file" meaning "boot/file within the image".
+        let dest_path = PathBuf::from(dest.strip_prefix('/').unwrap_or(dest));
         files.push(crate::bootloader::FileEntry::new(
             source_path,
-            PathBuf::from(dest),
+            dest_path,
         ));
     }
     Ok(files)

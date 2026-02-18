@@ -316,6 +316,48 @@ fn test_empty_extra_files_noop() {
     assert!(bootx64.exists());
 }
 
+/// Test that absolute destination paths (with leading `/`) are treated as relative to image root.
+#[test]
+fn test_extra_files_absolute_dest_path() {
+    let dir = tempfile::tempdir().unwrap();
+
+    let exe = dir.path().join("kernel.efi");
+    std::fs::write(&exe, b"fake uefi executable").unwrap();
+
+    // Create extra source file
+    std::fs::write(dir.path().join("initrd.cpio"), "fake initrd").unwrap();
+
+    let mut config = Config::default();
+    config.boot.boot_type = BootType::Uefi;
+    config.bootloader.kind = BootloaderKind::None;
+    config.image.format = ImageFormat::Directory;
+    // Use absolute destination path — should be stripped to relative
+    config
+        .extra_files
+        .insert("/boot/initrd.cpio".to_string(), "initrd.cpio".to_string());
+
+    let runner = ImageRunnerBuilder::new()
+        .with_config(config)
+        .workspace_root(dir.path())
+        .executable(&exe)
+        .build()
+        .unwrap();
+
+    let image_path = runner.build_image().unwrap();
+
+    // File should land at boot/initrd.cpio (relative), not /boot/initrd.cpio (absolute)
+    let initrd = image_path.join("boot/initrd.cpio");
+    assert!(
+        initrd.exists(),
+        "initrd.cpio should exist at {:?}",
+        initrd
+    );
+    assert_eq!(
+        std::fs::read_to_string(&initrd).unwrap(),
+        "fake initrd"
+    );
+}
+
 /// Test FAT image creation with UEFI + None bootloader.
 #[cfg(feature = "fat")]
 #[test]
