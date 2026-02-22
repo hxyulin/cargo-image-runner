@@ -88,6 +88,42 @@
 //!     kernel_path: boot():/boot/{{EXECUTABLE_NAME}}
 //! ```
 //!
+//! # I/O Capture & Streaming
+//!
+//! The [`IoHandler`] trait enables programmatic interaction with QEMU's serial port:
+//! - **Capture** serial output for test assertions ([`CaptureHandler`])
+//! - **Tee** output to both capture and terminal ([`runner::io::TeeHandler`])
+//! - **React** to patterns and send input ([`runner::io::PatternResponder`])
+//!
+//! ```no_run
+//! use cargo_image_runner::{builder, Config, CaptureHandler};
+//!
+//! # fn main() -> cargo_image_runner::Result<()> {
+//! let config = Config::from_toml_str(r#"
+//!     [boot]
+//!     type = "uefi"
+//!     [bootloader]
+//!     kind = "none"
+//!     [image]
+//!     format = "directory"
+//! "#)?;
+//!
+//! let result = builder()
+//!     .with_config(config)
+//!     .workspace_root(".")
+//!     .executable("target/x86_64-unknown-none/debug/my-kernel")
+//!     .io_handler(CaptureHandler::new())
+//!     .run_with_result()?;
+//!
+//! if let Some(output) = &result.captured_output {
+//!     if let Some(serial) = &output.serial {
+//!         println!("Serial output: {serial}");
+//!     }
+//! }
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! # Architecture
 //!
 //! The library is built around three core traits:
@@ -95,6 +131,7 @@
 //! - [`Bootloader`](bootloader::Bootloader): Prepares bootloader files and configuration
 //! - [`ImageBuilder`](image::ImageBuilder): Builds bootable images in various formats
 //! - [`Runner`](runner::Runner): Executes images (e.g., in QEMU)
+//! - [`IoHandler`](runner::io::IoHandler): Handles I/O from running instances
 //!
 //! These traits allow easy extensibility for custom bootloaders, image formats, and runners.
 //!
@@ -144,7 +181,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! cargo-image-runner = { version = "0.4", default-features = false, features = ["uefi", "qemu"] }
+//! cargo-image-runner = { version = "0.5", default-features = false, features = ["uefi", "qemu"] }
 //! ```
 
 pub mod bootloader;
@@ -157,7 +194,9 @@ pub mod util;
 
 // Re-export commonly used types
 pub use crate::core::{Error, ImageRunner, ImageRunnerBuilder, Result};
-pub use config::{BootType, BootloaderKind, Config, ImageFormat};
+pub use config::{BootType, BootloaderKind, Config, ImageFormat, SerialConfig, SerialMode};
+pub use runner::io::{CaptureHandler, CapturedIo, IoAction, IoHandler};
+pub use runner::{CapturedOutput, RunResult};
 
 /// Create a new image runner builder.
 ///

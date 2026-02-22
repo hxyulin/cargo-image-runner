@@ -5,7 +5,8 @@ use crate::config::ConfigLoader;
 use crate::core::context::Context;
 use crate::core::error::{Error, Result};
 use crate::image::ImageBuilder;
-use crate::runner::Runner;
+use crate::runner::io::IoHandler;
+use crate::runner::{RunResult, Runner};
 use std::path::PathBuf;
 
 /// Builder for creating and running bootable images.
@@ -17,6 +18,7 @@ pub struct ImageRunnerBuilder {
     image_builder: Option<Box<dyn ImageBuilder>>,
     runner: Option<Box<dyn Runner>>,
     cli_extra_args: Vec<String>,
+    io_handler: Option<Box<dyn IoHandler>>,
 }
 
 impl ImageRunnerBuilder {
@@ -30,6 +32,7 @@ impl ImageRunnerBuilder {
             image_builder: None,
             runner: None,
             cli_extra_args: Vec::new(),
+            io_handler: None,
         }
     }
 
@@ -145,6 +148,17 @@ impl ImageRunnerBuilder {
         self
     }
 
+    // --- I/O Handler Configuration ---
+
+    /// Set an I/O handler for serial capture/streaming.
+    ///
+    /// When set, the runner will pipe QEMU's serial output through the handler,
+    /// enabling capture, pattern matching, and reactive input.
+    pub fn io_handler<H: IoHandler + 'static>(mut self, handler: H) -> Self {
+        self.io_handler = Some(Box::new(handler));
+        self
+    }
+
     // --- Build and Execute ---
 
     /// Build the image runner.
@@ -188,6 +202,7 @@ impl ImageRunnerBuilder {
             image_builder,
             runner,
             cli_extra_args: self.cli_extra_args,
+            io_handler: self.io_handler,
         })
     }
 
@@ -195,6 +210,12 @@ impl ImageRunnerBuilder {
     pub fn run(self) -> Result<()> {
         let runner = self.build()?;
         runner.run()
+    }
+
+    /// Build and immediately run, returning the full [`RunResult`].
+    pub fn run_with_result(self) -> Result<RunResult> {
+        let runner = self.build()?;
+        runner.run_with_result()
     }
 }
 
@@ -213,6 +234,7 @@ pub struct ImageRunner {
     image_builder: Box<dyn ImageBuilder>,
     runner: Box<dyn Runner>,
     cli_extra_args: Vec<String>,
+    io_handler: Option<Box<dyn IoHandler>>,
 }
 
 impl ImageRunner {
@@ -297,7 +319,35 @@ impl ImageRunner {
     }
 
     /// Run the full pipeline: prepare bootloader, build image, execute.
+    ///
+    /// Returns `Ok(())` on success or an error on failure.
+    /// If an I/O handler was set, it will be used during execution.
     pub fn run(self) -> Result<()> {
+        let result = self.run_with_result()?;
+
+        // The run_with_result already checks exit codes, so if we get here
+        // it means the run was considered successful or we need to check.
+        // However, run_with_result returns the raw result, so we check here.
+        if result.timed_out {
+            return Err(Error::runner("test timed out"));
+        }
+
+        if !result.success {
+            return Err(Error::runner(format!(
+                "Execution failed with exit code: {}",
+                result.exit_code
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Run the full pipeline and return the detailed [`RunResult`].
+    ///
+    /// Unlike [`run()`](Self::run), this does not error on non-zero exit codes.
+    /// The caller can inspect the result to determine success/failure.
+    /// If an I/O handler was set, captured output will be available in the result.
+    pub fn run_with_result(mut self) -> Result<RunResult> {
         // Create context
         let mut ctx = Context::new(self.config, self.workspace_root, self.executable)?;
         ctx.cli_extra_args = self.cli_extra_args;
@@ -332,11 +382,9 @@ impl ImageRunner {
         // Process config files with templates
         for config_file in config_files {
             if config_file.needs_template_processing {
-                // Read, process, and write template
                 let content = std::fs::read_to_string(&config_file.source)?;
                 let processed = self.bootloader.process_templates(&content, &ctx.template_vars)?;
 
-                // Write to temporary file
                 let temp_path = ctx.output_dir.join("processed_config");
                 std::fs::create_dir_all(&temp_path)?;
                 let processed_file = temp_path.join(
@@ -372,34 +420,22 @@ impl ImageRunner {
         if ctx.config.verbose {
             println!("Running with: {}", self.runner.name());
         }
-        let result = self.runner.run(&ctx, &image_path)?;
 
-        // Check result
-        if ctx.is_test {
-            if result.timed_out {
-                return Err(Error::runner("test timed out"));
-            }
+        let mut result = if let Some(ref mut handler) = self.io_handler {
+            self.runner.run_with_io(&ctx, &image_path, handler.as_mut())?
+        } else {
+            self.runner.run(&ctx, &image_path)?
+        };
 
-            if let Some(success_code) = ctx.test_success_exit_code() {
-                if result.exit_code == success_code {
-                    return Ok(());
-                } else {
-                    return Err(Error::runner(format!(
-                        "Test failed: expected exit code {}, got {}",
-                        success_code, result.exit_code
-                    )));
-                }
+        // Populate captured_output from handler.finish() if available
+        if let Some(handler) = self.io_handler {
+            if let Some(captured_io) = handler.finish() {
+                let serial_str = String::from_utf8_lossy(&captured_io.serial).into_owned();
+                result = result.with_serial(serial_str);
             }
         }
 
-        if !result.success {
-            return Err(Error::runner(format!(
-                "Execution failed with exit code: {}",
-                result.exit_code
-            )));
-        }
-
-        Ok(())
+        Ok(result)
     }
 }
 

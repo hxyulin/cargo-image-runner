@@ -87,6 +87,15 @@ pub fn apply_env_overrides(config: &mut Config) {
     if let Some(val) = env_bool("KVM") {
         config.runner.qemu.kvm = val;
     }
+
+    if let Some(val) = env_str("SERIAL_MODE") {
+        match val.to_lowercase().as_str() {
+            "mon:stdio" => config.runner.qemu.serial.mode = super::SerialMode::MonStdio,
+            "stdio" => config.runner.qemu.serial.mode = super::SerialMode::Stdio,
+            "none" => config.runner.qemu.serial.mode = super::SerialMode::None,
+            _ => {} // invalid value, ignore
+        }
+    }
 }
 
 /// Summarize which env var overrides are currently active.
@@ -102,6 +111,7 @@ pub fn detect_active_overrides() -> Vec<(String, String)> {
         "VERBOSE",
         "KVM",
         "QEMU_ARGS",
+        "SERIAL_MODE",
     ];
 
     let mut active = Vec::new();
@@ -316,6 +326,50 @@ mod tests {
             let original = config.boot.boot_type;
             apply_env_overrides(&mut config);
             assert_eq!(config.boot.boot_type, original);
+        });
+    }
+
+    #[test]
+    fn test_apply_env_overrides_serial_mode_stdio() {
+        with_env_vars(&[("CARGO_IMAGE_RUNNER_SERIAL_MODE", "stdio")], || {
+            let mut config = Config::default();
+            apply_env_overrides(&mut config);
+            assert_eq!(config.runner.qemu.serial.mode, super::super::SerialMode::Stdio);
+        });
+    }
+
+    #[test]
+    fn test_apply_env_overrides_serial_mode_none() {
+        with_env_vars(&[("CARGO_IMAGE_RUNNER_SERIAL_MODE", "none")], || {
+            let mut config = Config::default();
+            apply_env_overrides(&mut config);
+            assert_eq!(config.runner.qemu.serial.mode, super::super::SerialMode::None);
+        });
+    }
+
+    #[test]
+    fn test_apply_env_overrides_serial_mode_mon_stdio() {
+        with_env_vars(&[("CARGO_IMAGE_RUNNER_SERIAL_MODE", "mon:stdio")], || {
+            let mut config = Config::default();
+            apply_env_overrides(&mut config);
+            assert_eq!(config.runner.qemu.serial.mode, super::super::SerialMode::MonStdio);
+        });
+    }
+
+    #[test]
+    fn test_apply_env_overrides_serial_mode_invalid_ignored() {
+        with_env_vars(&[("CARGO_IMAGE_RUNNER_SERIAL_MODE", "invalid")], || {
+            let mut config = Config::default();
+            apply_env_overrides(&mut config);
+            assert_eq!(config.runner.qemu.serial.mode, super::super::SerialMode::MonStdio);
+        });
+    }
+
+    #[test]
+    fn test_detect_active_overrides_includes_serial_mode() {
+        with_env_vars(&[("CARGO_IMAGE_RUNNER_SERIAL_MODE", "stdio")], || {
+            let overrides = detect_active_overrides();
+            assert!(overrides.iter().any(|(k, _)| k == "CARGO_IMAGE_RUNNER_SERIAL_MODE"));
         });
     }
 }

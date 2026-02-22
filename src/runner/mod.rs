@@ -4,6 +4,8 @@ use crate::core::context::Context;
 use crate::core::error::Result;
 use std::path::Path;
 
+pub mod io;
+
 // Runner implementations
 #[cfg(feature = "qemu")]
 pub mod qemu;
@@ -14,6 +16,20 @@ pub trait Runner: Send + Sync {
     ///
     /// Returns information about the run result.
     fn run(&self, ctx: &Context, image_path: &Path) -> Result<RunResult>;
+
+    /// Run with an I/O handler for serial capture/streaming.
+    ///
+    /// The handler receives callbacks for serial output, stderr, and process lifecycle.
+    /// Default implementation ignores the handler and delegates to [`run()`](Self::run).
+    fn run_with_io(
+        &self,
+        ctx: &Context,
+        image_path: &Path,
+        handler: &mut dyn io::IoHandler,
+    ) -> Result<RunResult> {
+        let _ = handler;
+        self.run(ctx, image_path)
+    }
 
     /// Check if the runner is available on the system.
     fn is_available(&self) -> bool;
@@ -52,10 +68,13 @@ pub struct RunResult {
 }
 
 /// Captured stdout and stderr from a runner execution.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct CapturedOutput {
     pub stdout: String,
     pub stderr: String,
+    /// Captured serial output (populated when an [`io::IoHandler`] is used).
+    pub serial: Option<String>,
 }
 
 impl RunResult {
@@ -91,7 +110,25 @@ impl RunResult {
 
     /// Attach captured output to the result.
     pub fn with_output(mut self, stdout: String, stderr: String) -> Self {
-        self.captured_output = Some(CapturedOutput { stdout, stderr });
+        self.captured_output = Some(CapturedOutput {
+            stdout,
+            stderr,
+            serial: None,
+        });
+        self
+    }
+
+    /// Attach captured serial output from an I/O handler.
+    pub fn with_serial(mut self, serial: String) -> Self {
+        if let Some(ref mut output) = self.captured_output {
+            output.serial = Some(serial);
+        } else {
+            self.captured_output = Some(CapturedOutput {
+                stdout: String::new(),
+                stderr: String::new(),
+                serial: Some(serial),
+            });
+        }
         self
     }
 

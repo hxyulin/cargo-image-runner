@@ -7,6 +7,7 @@ A generic, highly customizable embedded/kernel development runner for Rust. Buil
 - **Multiple Bootloaders**: Limine, GRUB, or direct boot (no bootloader)
 - **Multiple Image Formats**: Directory (for QEMU), ISO, FAT
 - **Multiple Boot Types**: BIOS, UEFI, or hybrid
+- **I/O Capture & Streaming**: Capture serial output, react to patterns, send input programmatically
 - **Trait-Based Architecture**: Easy to extend with custom bootloaders, image builders, and runners
 - **Builder Pattern API**: Ergonomic, fluent API for programmatic use
 - **Template Variables**: Powerful variable substitution in config files
@@ -23,7 +24,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [build-dependencies]
-cargo-image-runner = "0.3"
+cargo-image-runner = "0.5"
 ```
 
 Or install as a binary:
@@ -174,6 +175,22 @@ kvm = true                       # Enable KVM acceleration (Linux only)
 extra_args = []                  # Additional QEMU arguments (always applied)
 ```
 
+### Serial Configuration
+
+```toml
+[package.metadata.image-runner.runner.qemu.serial]
+mode = "mon:stdio"              # Serial mode (see table below)
+separate-monitor = false        # Separate QEMU monitor from serial port
+```
+
+| Mode | QEMU Flag | Description |
+|------|-----------|-------------|
+| `mon:stdio` | `-serial mon:stdio` | Serial + monitor multiplexed on stdio (default) |
+| `stdio` | `-serial stdio` | Serial only on stdio |
+| `none` | `-serial none` | No serial output |
+
+When using an I/O handler via the programmatic API, serial is automatically set to `stdio` with the monitor disabled, regardless of this setting.
+
 ### Test Configuration
 
 ```toml
@@ -247,6 +264,7 @@ Override any configuration at runtime without editing files. Useful for debuggin
 | `CARGO_IMAGE_RUNNER_BOOT_TYPE` | Boot type | `bios`, `uefi`, `hybrid` |
 | `CARGO_IMAGE_RUNNER_VERBOSE` | Verbose output | `1`, `true`, `yes` |
 | `CARGO_IMAGE_RUNNER_KVM` | KVM acceleration | `1`/`true`/`yes` or `0`/`false`/`no` |
+| `CARGO_IMAGE_RUNNER_SERIAL_MODE` | Serial mode | `mon:stdio`, `stdio`, `none` |
 
 Invalid values are silently ignored (the config file value is kept).
 
@@ -422,8 +440,10 @@ fn main() -> cargo_image_runner::Result<()> {
 | `.iso_image()` | Output as ISO |
 | `.fat_image()` | Output as FAT image |
 | `.qemu()` | Use QEMU runner |
+| `.io_handler(handler)` | Set an I/O handler for serial capture/streaming |
 | `.build()?` | Build `ImageRunner` (does not execute) |
 | `.run()?` | Build and immediately execute |
+| `.run_with_result()?` | Build, execute, and return the full `RunResult` |
 
 ### Custom Bootloader
 
@@ -462,6 +482,95 @@ fn main() -> cargo_image_runner::Result<()> {
         .run()
 }
 ```
+
+### I/O Capture & Streaming
+
+The `IoHandler` trait enables programmatic interaction with QEMU's serial port. Built-in handlers cover common use cases, and you can implement custom handlers for advanced scenarios.
+
+#### Capture Output for Assertions
+
+```rust
+use cargo_image_runner::{builder, Config, CaptureHandler};
+
+fn main() -> cargo_image_runner::Result<()> {
+    let config = Config::from_toml_str(r#"
+        [boot]
+        type = "uefi"
+        [bootloader]
+        kind = "none"
+        [image]
+        format = "directory"
+    "#)?;
+
+    let result = builder()
+        .with_config(config)
+        .workspace_root(".")
+        .executable("target/x86_64-unknown-none/debug/my-kernel")
+        .io_handler(CaptureHandler::new())
+        .run_with_result()?;
+
+    // Serial output is available for inspection
+    if let Some(output) = &result.captured_output {
+        if let Some(serial) = &output.serial {
+            assert!(serial.contains("TEST PASSED"));
+        }
+    }
+    Ok(())
+}
+```
+
+#### React to Output Patterns
+
+```rust
+use cargo_image_runner::{builder, Config};
+use cargo_image_runner::runner::io::PatternResponder;
+
+fn main() -> cargo_image_runner::Result<()> {
+    let config = Config::from_toml_str("...")?;
+
+    // Automatically respond to prompts
+    builder()
+        .with_config(config)
+        .workspace_root(".")
+        .executable("target/x86_64-unknown-none/debug/my-kernel")
+        .io_handler(
+            PatternResponder::new()
+                .on_pattern("login:", b"root\n")
+                .on_pattern("$ ", b"run-tests\n")
+        )
+        .run()?;
+    Ok(())
+}
+```
+
+#### Custom I/O Handler
+
+```rust
+use cargo_image_runner::{IoHandler, IoAction};
+
+struct PanicDetector {
+    panicked: bool,
+}
+
+impl IoHandler for PanicDetector {
+    fn on_output(&mut self, data: &[u8]) -> IoAction {
+        if String::from_utf8_lossy(data).contains("PANIC") {
+            self.panicked = true;
+            IoAction::Shutdown
+        } else {
+            IoAction::Continue
+        }
+    }
+}
+```
+
+#### Built-in Handlers
+
+| Handler | Description |
+|---------|-------------|
+| `CaptureHandler` | Accumulates all serial + stderr output, available via `finish()` |
+| `TeeHandler` | Captures AND echoes to the real terminal |
+| `PatternResponder` | Matches string patterns in serial output and sends responses |
 
 ## Examples
 
@@ -534,6 +643,8 @@ pub trait ImageBuilder {
 ```rust
 pub trait Runner {
     fn run(&self, ctx: &Context, image_path: &Path) -> Result<RunResult>;
+    fn run_with_io(&self, ctx: &Context, image_path: &Path,
+        handler: &mut dyn IoHandler) -> Result<RunResult>;
     fn is_available(&self) -> bool;
     fn name(&self) -> &str;
 }
@@ -547,7 +658,7 @@ pub trait Runner {
 | `config/` | `Config` struct, `ConfigLoader`, `env` (environment variable processing) |
 | `bootloader/` | `Bootloader` trait + impls: `limine`, `grub`, `none`; `fetcher` for downloads |
 | `image/` | `ImageBuilder` trait + impls: `directory`, `iso`, `fat`; `template` processor |
-| `runner/` | `Runner` trait + impl: `qemu` |
+| `runner/` | `Runner` trait + impl: `qemu`; `io` module for I/O capture/streaming |
 | `firmware/` | UEFI firmware (`ovmf`) |
 | `util/` | Filesystem helpers (`fs`), hashing (`hash`) |
 

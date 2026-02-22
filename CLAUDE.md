@@ -46,7 +46,7 @@ Entry point is the **builder pattern** (`builder()` → `ImageRunnerBuilder` →
 | `config/env.rs` | Reads `CARGO_IMAGE_RUNNER_*` env vars: profile selection, field overrides, template vars, extra QEMU args |
 | `bootloader/` | `Bootloader` trait + impls: `limine`, `grub`, `none`; `fetcher` for downloading bootloader files |
 | `image/` | `ImageBuilder` trait + impls: `directory`, `iso`, `fat`; `template` processor |
-| `runner/` | `Runner` trait + impl: `qemu` |
+| `runner/` | `Runner` trait + impl: `qemu`; `io` module (`IoHandler` trait, `CaptureHandler`, `TeeHandler`, `PatternResponder`) |
 | `firmware/` | UEFI firmware (`ovmf`) |
 | `util/` | Filesystem helpers (`fs`), hashing (`hash`) |
 
@@ -67,7 +67,7 @@ Located under `examples/`, each demonstrating a different configuration combinat
 
 ## Tests
 
-- **Unit tests**: In-module `#[cfg(test)]` blocks in `core/context.rs`, `core/builder.rs`, `config/loader.rs`, `config/mod.rs`, `config/env.rs`, `util/fs.rs`, `util/hash.rs`, `image/template.rs`, `bootloader/mod.rs`, `core/error.rs`
+- **Unit tests**: In-module `#[cfg(test)]` blocks in `core/context.rs`, `core/builder.rs`, `config/loader.rs`, `config/mod.rs`, `config/env.rs`, `util/fs.rs`, `util/hash.rs`, `image/template.rs`, `bootloader/mod.rs`, `core/error.rs`, `runner/io.rs`
 - **Integration tests**: `tests/config_integration.rs`, `tests/builder_pipeline.rs`, `tests/template_integration.rs`
 - **Env var tests** use a `Mutex`-based guard pattern (`ENV_LOCK`) to serialize tests that call `set_var`/`remove_var` (unsafe in Rust 2024 edition)
 
@@ -90,9 +90,13 @@ format = "directory"            # directory | iso | fat
 
 **Profile system**: Profiles defined under `[package.metadata.image-runner.profiles.<name>]`, selected via `CARGO_IMAGE_RUNNER_PROFILE=<name>`. Applied via recursive JSON deep-merge (`config::loader::deep_merge`).
 
-**Environment variable overrides** (`config::env`): `CARGO_IMAGE_RUNNER_QEMU_MEMORY`, `CARGO_IMAGE_RUNNER_BOOT_TYPE`, `CARGO_IMAGE_RUNNER_VERBOSE`, etc. Applied after profile overlay as highest-priority config source.
+**Environment variable overrides** (`config::env`): `CARGO_IMAGE_RUNNER_QEMU_MEMORY`, `CARGO_IMAGE_RUNNER_BOOT_TYPE`, `CARGO_IMAGE_RUNNER_VERBOSE`, `CARGO_IMAGE_RUNNER_SERIAL_MODE`, etc. Applied after profile overlay as highest-priority config source.
 
 **QEMU arg layering** (appended in order): config `extra_args` → test/run `extra-args` → `CARGO_IMAGE_RUNNER_QEMU_ARGS` env var → CLI `-- args`.
+
+**I/O handler system** (`runner::io`): Trait-based `IoHandler` enables serial capture/streaming. `run_with_io()` on `Runner` pipes QEMU's stdout/stderr through reader threads → `mpsc::channel` → main event loop calling handler callbacks. `IoAction::SendInput` writes to child stdin, `IoAction::Shutdown` kills the process. Builder wires handler via `.io_handler()` method; `run_with_result()` returns `RunResult` with captured output from `handler.finish()`. Built-in: `CaptureHandler`, `TeeHandler`, `PatternResponder`.
+
+**Serial configuration** (`config::SerialConfig`): `mode` field on `QemuConfig` controls `-serial` flag: `MonStdio` (default, backward-compatible), `Stdio`, `None`. When an `IoHandler` is attached, serial is forced to `stdio` with `-monitor none` for clean serial-only piping.
 
 **Feature-gated compilation**: Bootloader/image/runner implementations are behind `#[cfg(feature = "...")]`. Adding a new impl means adding a feature flag and the corresponding module.
 

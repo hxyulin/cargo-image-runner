@@ -248,9 +248,49 @@ pub struct QemuConfig {
     #[serde(default = "default_true")]
     pub kvm: bool,
 
+    /// Serial port configuration.
+    #[serde(default)]
+    pub serial: SerialConfig,
+
     /// Additional QEMU arguments.
     #[serde(default)]
     pub extra_args: Vec<String>,
+}
+
+/// Serial port configuration for QEMU.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SerialConfig {
+    /// Serial mode: `"mon:stdio"` (default), `"stdio"`, `"none"`.
+    pub mode: SerialMode,
+    /// Separate QEMU monitor from serial port.
+    /// When `None`, the runner decides automatically.
+    #[serde(default, rename = "separate-monitor")]
+    pub separate_monitor: Option<bool>,
+}
+
+impl Default for SerialConfig {
+    fn default() -> Self {
+        Self {
+            mode: SerialMode::default(),
+            separate_monitor: None,
+        }
+    }
+}
+
+/// Serial mode for QEMU's `-serial` flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum SerialMode {
+    /// `-serial mon:stdio` — serial + monitor multiplexed on stdio (default).
+    #[default]
+    #[serde(rename = "mon:stdio")]
+    MonStdio,
+    /// `-serial stdio` — serial only on stdio.
+    #[serde(rename = "stdio")]
+    Stdio,
+    /// `-serial none` — no serial output.
+    #[serde(rename = "none")]
+    None,
 }
 
 fn default_qemu_binary() -> String {
@@ -277,6 +317,7 @@ impl Default for QemuConfig {
             memory: 1024,
             cores: 1,
             kvm: true,
+            serial: SerialConfig::default(),
             extra_args: Vec::new(),
         }
     }
@@ -465,7 +506,72 @@ mod tests {
         assert_eq!(qemu.memory, 1024);
         assert_eq!(qemu.cores, 1);
         assert!(qemu.kvm);
+        assert_eq!(qemu.serial.mode, SerialMode::MonStdio);
+        assert_eq!(qemu.serial.separate_monitor, None);
         assert!(qemu.extra_args.is_empty());
+    }
+
+    #[test]
+    fn test_serial_config_defaults() {
+        let serial = SerialConfig::default();
+        assert_eq!(serial.mode, SerialMode::MonStdio);
+        assert_eq!(serial.separate_monitor, None);
+    }
+
+    #[test]
+    fn test_serial_config_deserialize_stdio() {
+        let toml_str = r#"
+        [runner]
+        kind = "qemu"
+
+        [runner.qemu.serial]
+        mode = "stdio"
+        separate-monitor = true
+        "#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.runner.qemu.serial.mode, SerialMode::Stdio);
+        assert_eq!(config.runner.qemu.serial.separate_monitor, Some(true));
+    }
+
+    #[test]
+    fn test_serial_config_deserialize_none() {
+        let toml_str = r#"
+        [runner]
+        kind = "qemu"
+
+        [runner.qemu.serial]
+        mode = "none"
+        "#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.runner.qemu.serial.mode, SerialMode::None);
+        assert_eq!(config.runner.qemu.serial.separate_monitor, None);
+    }
+
+    #[test]
+    fn test_serial_config_deserialize_mon_stdio() {
+        let toml_str = r#"
+        [runner]
+        kind = "qemu"
+
+        [runner.qemu.serial]
+        mode = "mon:stdio"
+        "#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.runner.qemu.serial.mode, SerialMode::MonStdio);
+    }
+
+    #[test]
+    fn test_serial_config_omitted_uses_defaults() {
+        let toml_str = r#"
+        [runner]
+        kind = "qemu"
+
+        [runner.qemu]
+        memory = 2048
+        "#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.runner.qemu.serial.mode, SerialMode::MonStdio);
+        assert_eq!(config.runner.qemu.serial.separate_monitor, None);
     }
 
     #[test]
